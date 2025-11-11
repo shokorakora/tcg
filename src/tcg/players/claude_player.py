@@ -1,7 +1,8 @@
 """
-Strategic AI Player
+AI Player
 
 戦略的に考えて行動する強いAIプレイヤー
+Claudeが作りました
 """
 
 from tcg.config import fortress_cool, fortress_limit
