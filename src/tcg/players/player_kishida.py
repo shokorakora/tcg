@@ -83,6 +83,3 @@ class TemplatePlayer(Controller):
         #             return 2, i, 0  # アップグレード
 
         return command, subject, to
-
-  git config --global user.email "you@example.com"
-  git config --global user.name "Your Name"
