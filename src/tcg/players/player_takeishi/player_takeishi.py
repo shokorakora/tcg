@@ -1,55 +1,39 @@
 from tcg.controller import Controller
-from tcg.players.player_takeishi.strategies.heuristic import heuristic_strategy
-# from tcg.players.player_takeishi.strategies.learning import LearningStrategy
-# from tcg.players.player_takeishi.models.policy import PolicyModel
+from tcg.config import fortress_limit
 
 class TakeishiPlayer(Controller):
-    """
-    Takeishi AI Player
-
-    This class implements a strong AI player using heuristic and learning strategies.
-    """
-
     def __init__(self) -> None:
         super().__init__()
         self.step = 0
-        # self.heuristic_strategy = HeuristicStrategy()
-        # self.learning_strategy = LearningStrategy()
-        # self.policy_model = PolicyModel()
 
     def team_name(self) -> str:
-        """
-        Returns the player name for tournament display.
-
-        Returns:
-            str: Player name
-        """
         return "TakeishiAI"
 
     def update(self, info) -> tuple[int, int, int]:
-        """
-        Called every step to update the player's strategy based on game information.
-
-        Args:
-            info: Game information tuple
-                - team (int): Self 1, opponent 2, neutral 0
-                - state (list): State of 12 fortresses
-                - moving_pawns (list): Information of moving units
-                - spawning_pawns (list): Units waiting to spawn
-                - done (bool): Game end flag
-
-        Returns:
-            tuple[int, int, int]: (command, subject, to)
-        """
-        # team, state, moving_pawns, spawning_pawns, done = info
         self.step += 1
+        team, state, moving_pawns, spawning_pawns, done = info
 
-        # Implementing strategy selection
-        # if self.step < 10:
-        #     command, subject, to = self.heuristic_strategy.decide(state)
-        # else:
-        #     command, subject, to = self.learning_strategy.decide(state, self.policy_model)
+        # 自軍のアップグレード候補を収集（upgrade_time < 0 が「待機中で実行可」）
+        candidates = []
+        for i, f in enumerate(state):
+            ft_team, _, level, pawn_number, upgrade_time, _ = f
+            if ft_team != 1:
+                continue
+            if level >= 5:
+                continue
+            if upgrade_time >= 0:  # 実行中 or 実行不可とみなす
+                continue
+            need = max(1, fortress_limit[level] // 2)
+            if pawn_number >= need:
+                candidates.append((level, -pawn_number, i))  # 低レベル・兵多い優先
 
-        # return command, subject, to
+        if self.step <= 10:
+            print(f"[Step {self.step}] candidates={candidates}")
 
-        return heuristic_strategy(info)
+        if candidates:
+            candidates.sort()
+            _, _, subj = candidates[0]
+            return (2, subj, 0)
+
+        # アップグレード候補がないターンは待機（兵を貯める）
+        return (0, 0, 0)

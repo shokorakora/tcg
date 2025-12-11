@@ -4,7 +4,7 @@
 HEIGHT, WIDTH = 780, 1000
 
 # Game speed settings
-SPEEDRATE = 40  # Simulation steps per frame
+SPEEDRATE = 30  # Simulation steps per frameもともと40
 FPS = 30  # Frames per second
 
 # Game limits
