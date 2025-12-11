@@ -1,109 +1,120 @@
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import random
+
+Action = Tuple[int, int, int]  # (command, subject, to)
 
 class LearningPlayer:
     """
-    AIプレイヤーの学習戦略モデルを定義するファイル
+    Q学習の簡易枠組み（行動は (command, subject, to) で扱う）。
+    - 0: 何もしない -> (0, 0, 0)
+    - 1: 部隊移動 -> (1, from_fortress, to_fortress) ただし to は隣接のみ
+    - 2: アップグレード -> (2, fortress_id, 0)
     """
 
     def __init__(self):
-        self.q_table = {}  # 各行動のQ値を格納するテーブル
-        self.learning_rate = 0.1  # 学習率
-        self.discount_factor = 0.9  # 割引率
-        self.exploration_rate = 1.0  # 探索率 (ε-greedy戦略用)
-        self.exploration_decay = 0.99  # 探索率の減衰率 (ε-greedy戦略用)　更新ごとにεを減衰
-        self.min_exploration_rate = 0.1  # 最小探索率 (ε-greedy戦略用)　εの下限値(完全に探索をやめないために設定)
-    def choose_action(self, state: Tuple) -> int:
+        self.q_table: Dict[Tuple, Dict[Action, float]] = {}  # 状態 -> {行動: Q値}
+        self.learning_rate = 0.1
+        self.discount_factor = 0.9
+        self.exploration_rate = 1.0
+        self.exploration_decay = 0.995
+        self.min_exploration_rate = 0.05
+
+    # ---- 公開API想定（ゲームのupdateから呼ぶ用） ----
+    def select_action(self, info) -> Action:
         """
-       ε-greedy戦略に基づいて行動を選択する
-        引数:
-            state: ゲームの現在の状態
-
-        返り値:
-            int: 選択された行動
+        info = (team, state, moving_pawns, spawning_pawns, done)
         """
-        if random.uniform(0, 1) < self.exploration_rate: #0~1の一様乱数が探索率(ε)未満なら探索(ランダム行動)
-            return random.choice([0, 1, 2])  # 探索: ランダムに行動を選択
-        else:
-            return self.best_action(state)  # 利用: Q値テーブルに基づいて最良の行動を選択
+        team, state, moving_pawns, spawning_pawns, done = info
+        state_key = self._state_key(state)
+        actions = self._legal_actions(state)
 
-    def best_action(self, state: Tuple) -> int:
+        # 探索
+        if random.random() < self.exploration_rate:
+            return random.choice(actions)
+
+        # 利用
+        return self._best_action(state_key, actions)
+
+    def observe(self, prev_state, action: Action, reward: float, next_state):
         """
-        Q値テーブルに基づいて最良の行動を選択する
-
-        引数:
-            state: ゲームの現在の状態
-
-        返り値:
-            int: 最良の行動
+        学習更新（環境から報酬と次状態を受け取ったときに呼ぶ）
         """
+        s_key = self._state_key(prev_state)
+        ns_key = self._state_key(next_state)
 
-        # Q値が最大の行動を返す
-        return max(self.q_table.get(state, {0: 0, 1: 0, 2: 0}), key=self.q_table.get(state, {0: 0, 1: 0, 2: 0}).get)
+        current_q = self._get_q(s_key, action)
+        next_best_q = self._best_q(ns_key)
 
-    def update_q_table(self, state: Tuple, action: int, reward: float, next_state: Tuple):
-        """
-        Q値テーブルを更新する
+        new_q = (1 - self.learning_rate) * current_q + self.learning_rate * (reward + self.discount_factor * next_best_q)
+        self._set_q(s_key, action, new_q)
 
-        引数:
-            state: 直前のゲームの状態
-            action: 取った行動
-            reward: 行動後に得られた報酬
-            next_state: 行動後の新しいゲームの状態
-        """
-        current_q = self.q_table.get(state, {0: 0, 1: 0, 2: 0}).get(action, 0)
-        max_future_q = max(self.q_table.get(next_state, {0: 0, 1: 0, 2: 0}).values())
-        new_q = (1 - self.learning_rate) * current_q + self.learning_rate * (reward + self.discount_factor * max_future_q)
-        
-        if state not in self.q_table:
-            self.q_table[state] = {0: 0, 1: 0, 2: 0}
-        self.q_table[state][action] = new_q
-
-        # Decay exploration rate
+        # ε減衰
         self.exploration_rate = max(self.min_exploration_rate, self.exploration_rate * self.exploration_decay)
 
-    def reset(self):
+    # ---- 内部ヘルパー ----
+    def _state_key(self, state: List[List[int]]) -> Tuple:
         """
-       学習パラメータやQ値テーブルをリセットする
+        Qテーブル用の軽量キーを作る（teamはすでに自分視点=1で渡ってくる想定）
+        形式: 各要塞につき (team, level, pawn_number, upgrade_time) のタプル列
         """
-        self.q_table.clear()
-        self.exploration_rate = 1.0
+        return tuple((f[0], f[2], f[3], f[4]) for f in state)
 
-    def train(self, episodes: int):
-        """
-        エピソード数を与えて学習を実行する
+    def _legal_actions(self, state: List[List[int]]) -> List[Action]:
+        actions: List[Action] = []
 
-        引数:
-            episodes: 学習エピソード数
-        """
-        for episode in range(episodes):
-            state = self.reset_game()  # 各エピソードの開始にゲームをリセットして初期状態を取得
-            done = False # エピソード終了フラグ
-            
-            while not done: # エピソードが終了するまでループ
-                action = self.choose_action(state)
-                next_state, reward, done = self.take_action(action)  # Implement this method to take action in the game
-                self.update_q_table(state, action, reward, next_state)
-                state = next_state
+        # 何もしない
+        actions.append((0, 0, 0))
 
-    def reset_game(self) -> Tuple:
-        """
-        状態を初期化して初期状態を返す
+        # アップグレード候補（自軍、upgrade_time==0、兵数>=上限の半分）
+        fortress_limit = [10, 10, 20, 30, 40, 50]
+        for i in range(len(state)):
+            team, _, level, pawn_number, upgrade_time, _ = state[i]
+            if team == 1 and upgrade_time == 0 and pawn_number >= fortress_limit[level] // 2:
+                actions.append((2, i, 0))
 
-        返り値:
-            Tuple: ゲームの初期状態
-        """
-        # Implement the logic to reset the game and return the initial state
-        pass
+        # 移動候補（自軍から隣接へ）
+        for i in range(len(state)):
+            team, _, _, pawn_number, _, neighbors = state[i]
+            if team != 1 or pawn_number <= 1:
+                continue
+            for n in neighbors:
+                # subject=i から to=n へ
+                actions.append((1, i, n))
 
-    def take_action(self, action: int) -> Tuple[Tuple, float, bool]:
-        """
-       指定した行動を適用して、次の状態、報酬、終了フラグを返す
-        引数:
-            action: 取る行動
+        return actions if actions else [(0, 0, 0)]
 
-        返り値:
-            Tuple[Tuple, float, bool]: 次の状態、報酬、終了フラグ
+    def _best_action(self, state_key: Tuple, actions: List[Action]) -> Action:
+        # 未学習状態ならランダム
+        if state_key not in self.q_table:
+            return random.choice(actions)
+        qdict = self.q_table[state_key]
+        # 候補にない行動は0扱いで比較
+        return max(actions, key=lambda a: qdict.get(a, 0.0))
+
+    def _best_q(self, state_key: Tuple) -> float:
+        qdict = self.q_table.get(state_key)
+        if not qdict:
+            return 0.0
+        return max(qdict.values()) if qdict else 0.0
+
+    def _get_q(self, state_key: Tuple, action: Action) -> float:
+        qdict = self.q_table.get(state_key)
+        if not qdict:
+            return 0.0
+        return qdict.get(action, 0.0)
+
+    def _set_q(self, state_key: Tuple, action: Action, value: float):
+        if state_key not in self.q_table:
+            self.q_table[state_key] = {}
+        self.q_table[state_key][action] = value
+
+    # ---- オフライン学習用（任意） ----
+    def train_episode(self, env_step, reward_fn, max_steps: int = 200):
         """
-        # Implement the logic to take action and return the next state, reward, and done flag
-        pass
+        環境ステップ関数と報酬関数を渡して1エピソード分学習する簡易ループ。
+        - env_step(action) -> (next_state, done) を想定
+        - reward_fn(prev_state, action, next_state) -> float を想定
+        """
+        # 初期状態は呼び出し側で用意して、最初の env_step(None) などで返す設計でもOK
+        # ここでは簡易に呼び出し側が最初に外から state を与える前提にする
+        raise NotImplementedError("train_episode は、ゲーム環境に合わせて呼び出し側で実装してください。")

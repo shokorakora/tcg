@@ -1,7 +1,7 @@
 from tcg.controller import Controller
-from tcg.players.player_takeishi.strategies.heuristic import HeuristicStrategy
-from tcg.players.player_takeishi.strategies.learning import LearningStrategy
-from tcg.players.player_takeishi.models.policy import PolicyModel
+from tcg.players.player_takeishi.strategies.heuristic import heuristic_strategy
+# from tcg.players.player_takeishi.strategies.learning import LearningStrategy
+# from tcg.players.player_takeishi.models.policy import PolicyModel
 
 class TakeishiPlayer(Controller):
     """
@@ -13,9 +13,9 @@ class TakeishiPlayer(Controller):
     def __init__(self) -> None:
         super().__init__()
         self.step = 0
-        self.heuristic_strategy = HeuristicStrategy()
-        self.learning_strategy = LearningStrategy()
-        self.policy_model = PolicyModel()
+        # self.heuristic_strategy = HeuristicStrategy()
+        # self.learning_strategy = LearningStrategy()
+        # self.policy_model = PolicyModel()
 
     def team_name(self) -> str:
         """
@@ -41,13 +41,15 @@ class TakeishiPlayer(Controller):
         Returns:
             tuple[int, int, int]: (command, subject, to)
         """
-        team, state, moving_pawns, spawning_pawns, done = info
+        # team, state, moving_pawns, spawning_pawns, done = info
         self.step += 1
 
         # Implementing strategy selection
-        if self.step < 10:
-            command, subject, to = self.heuristic_strategy.decide(state)
-        else:
-            command, subject, to = self.learning_strategy.decide(state, self.policy_model)
+        # if self.step < 10:
+        #     command, subject, to = self.heuristic_strategy.decide(state)
+        # else:
+        #     command, subject, to = self.learning_strategy.decide(state, self.policy_model)
 
-        return command, subject, to
+        # return command, subject, to
+
+        return heuristic_strategy(info)
