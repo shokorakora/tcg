@@ -13,27 +13,29 @@ class TakeishiPlayer(Controller):
         self.step += 1
         team, state, moving_pawns, spawning_pawns, done = info
 
-        # 自軍のアップグレード候補を収集（upgrade_time < 0 が「待機中で実行可」）
-        candidates = []
-        for i, f in enumerate(state):
-            ft_team, _, level, pawn_number, upgrade_time, _ = f
-            if ft_team != 1:
-                continue
-            if level >= 5:
-                continue
-            if upgrade_time >= 0:  # 実行中 or 実行不可とみなす
-                continue
-            need = max(1, fortress_limit[level] // 2)
-            if pawn_number >= need:
-                candidates.append((level, -pawn_number, i))  # 低レベル・兵多い優先
+        # 自軍拠点を取得（このマップは自軍が1拠点のみのことが多い）
+        my_forts = [i for i, f in enumerate(state) if f[0] == 1]
+        if not my_forts:
+            return (0, 0, 0)
+        i = my_forts[0]
+        _, _, level, pawns, upg_time, neighbors = state[i]
 
-        if self.step <= 10:
-            print(f"[Step {self.step}] candidates={candidates}")
+        # 1) アップグレードフェーズ：upgrade_time < 0 なら連続でLv5まで上げる
+        if level < 5 and upg_time < 0:
+            need = max(1, fortress_limit[level] // 3)  # 1/3に緩和
+            if pawns >= need:
+                return (2, i, 0)
 
-        if candidates:
-            candidates.sort()
-            _, _, subj = candidates[0]
-            return (2, subj, 0)
+        # 2) 実行中は待機（完了まで約 upg_time ターン）
+        if level < 5 and upg_time >= 0:
+            return (0, 0, 0)
 
-        # アップグレード候補がないターンは待機（兵を貯める）
+        # 3) Lv5達成後の拡大：最も弱い中立へ送兵（最低8兵送れるとき）
+        if level >= 5 and pawns // 2 >= 8:
+            neutral = [n for n in neighbors if state[n][0] == 0]
+            if neutral:
+                target = min(neutral, key=lambda n: (state[n][3], state[n][2]))
+                return (1, i, target)
+
+        # 4) それ以外は兵を貯める
         return (0, 0, 0)
