@@ -122,6 +122,34 @@ class TakeishiPlayer(Controller):
                         print(f"[Takeishi] step{self.step} CONCENTRATE from {src} -> {recv} (p:{src_pawns})")
                         return (1, src, recv)
 
+            # 3b) Rear mobilization: if some rear forts (not frontline) are sitting with many pawns,
+            # send probes to neutral 8 if available or forward to a nearer frontline/weak neighbor.
+            for f in my_forts:
+                f_pawns = state[f][3]
+                if f in frontlines:
+                    continue
+                if f_pawns < 6:
+                    continue
+                # prefer neutral 8 if adjacent
+                if 8 in state[f][5] and state[8][0] == 0:
+                    key = (f, 8)
+                    if self.last_sent.get(key, -9999) + self.send_cooldown <= self.step:
+                        self.last_sent[key] = self.step
+                        self.idle_steps = 0
+                        print(f"[Takeishi] step{self.step} REAR_PROBE from {f} -> neutral 8 (p:{f_pawns})")
+                        return (1, f, 8)
+                # else forward to weakest neighboring frontline or lower-pawn own neighbor
+                own_neighbors = [n for n in state[f][5] if state[n][0] == 1]
+                if own_neighbors:
+                    recv = min(own_neighbors, key=lambda n: state[n][3])
+                    if state[recv][3] + 2 < f_pawns:
+                        key = (f, recv)
+                        if self.last_sent.get(key, -9999) + self.send_cooldown <= self.step:
+                            self.last_sent[key] = self.step
+                            self.idle_steps = 0
+                            print(f"[Takeishi] step{self.step} REAR_FORWARD from {f} -> {recv} (p:{f_pawns})")
+                            return (1, f, recv)
+
             # 4) Otherwise, opportunistically expand to nearest weak neutral from primary src
             if src_pawns // 2 >= 1:
                 neutral = [n for n in src_neighbors if state[n][0] == 0]

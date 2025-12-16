@@ -9,12 +9,12 @@ from tcg.players.players_kishida.ml_player import MLPlayer
 
 if __name__ == "__main__":
     # Blue vs Red で対戦
-    print("=== TakeishiPlayer (Blue) vs RandomPlayer (Red) ===")
+    print("=== TakeishiPlayer (Blue) vs ClaudePlayer (Red) ===")
 
     # デフォルト: ウィンドウ表示あり
-    Game(TakeishiPlayer(), RandomPlayer()).run()
+    #Game(TakeishiPlayer(), ClaudePlayer()).run()
 
     # ウィンドウ表示なし（高速実行）の場合:
-    #Game(TakeishiPlayer(), RandomPlayer(), window=False).run()
+    Game(TakeishiPlayer(), ClaudePlayer(), window=False).run()
 
     pygame.quit()
