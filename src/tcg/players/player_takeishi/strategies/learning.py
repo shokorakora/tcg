@@ -49,13 +49,23 @@ def featurize_state(state) -> np.ndarray:
     ]
     return np.array(vec, dtype=np.float32)
 
-# Per-action local features
-def featurize_action(state, src: int, dst: int) -> np.ndarray:
+# Per-action local features (supports move and upgrade)
+def featurize_action(state, cmd: int, src: int, dst: int) -> np.ndarray:
     s_team, _, s_lvl, s_pawns, s_upg, s_neighbors = state[src]
+    if cmd == 2:
+        # upgrade feature vector: reuse shape with relevant fields
+        from tcg.config import fortress_limit
+        half_send = float(s_pawns // 2)
+        required = float(fortress_limit[s_lvl] // 2)
+        margin = half_send - required
+        vec = [
+            float(s_lvl), float(s_pawns), 0.0, 0.0,
+            0.0, 0.0, half_send, required, margin,
+        ]
+        return np.array(vec, dtype=np.float32)
     d_team, _, d_lvl, d_pawns, d_upg, d_neighbors = state[dst]
     is_enemy = 1.0 if (d_team != 0 and d_team != 1) else 0.0
     is_neutral = 1.0 if d_team == 0 else 0.0
-    # half send heuristic magnitude
     half_send = float(s_pawns // 2)
     needed = float(d_pawns + d_lvl * 2 + 1)
     margin = half_send - needed
@@ -120,6 +130,16 @@ def heuristic_fallback(state) -> Tuple[int,int,int]:
         return (0,0,0)
     # Prefer sending from the fort with most pawns
     my_forts_sorted = sorted(my_forts, key=lambda i: state[i][3], reverse=True)
+    # Priority plan: capture 9, then 11 from 10 if feasible
+    if 10 in my_forts_sorted:
+        s = 10
+        for target in [9, 11]:
+            if target in state[s][5]:
+                d_team, _, d_lvl, d_pawns, _, _ = state[target]
+                needed = d_pawns + d_lvl * 2 + 1
+                half_send = state[s][3] // 2
+                if half_send >= needed and d_team != 1:
+                    return (1, s, target)
     # 0) Upgrade if possible
     from tcg.config import fortress_limit
     for s in my_forts_sorted:
@@ -200,16 +220,23 @@ class LearningAgent:
     def __init__(self, model_path: Optional[str] = None, device: str = "cpu"):
         self.device = device
         self.net = None
+        self.target_net = None
         self.replay = ReplayBuffer()
         self.epsilon = 0.2
+        self._train_steps = 0
+        self.target_tau = 0.01  # soft update rate
         if torch is not None:
             # input is state(6) + action(9) = 15 dims
             self.net = QNet(inp_dim=15).to(self.device)
+            self.target_net = QNet(inp_dim=15).to(self.device)
             if model_path is not None:
                 try:
                     self.net.load_state_dict(torch.load(model_path, map_location=self.device))
                 except Exception:
                     pass
+            # initialize target with online weights
+            self.target_net.load_state_dict(self.net.state_dict())
+            self.target_net.eval()
         # debug counter
         self._debug_prints = 0
 
@@ -231,7 +258,7 @@ class LearningAgent:
         vals = []
         with torch.no_grad():
             for (cmd,s,t) in candidates:
-                act_vec = featurize_action(state, s, t) if cmd == 1 else np.zeros(9, dtype=np.float32)
+                act_vec = featurize_action(state, cmd, s, t)
                 inp = np.concatenate([state_vec, act_vec]).astype(np.float32)
                 x = torch.from_numpy(inp).float().to(self.device)
                 val = self.net(x.unsqueeze(0)).item()
@@ -262,7 +289,7 @@ class LearningAgent:
         self.replay.push((prev_state_vec, action_vec, reward, next_raw_state, done))
 
     def train_from_replay(self, epochs: int = 1, batch_size: int = 64, lr: float = 1e-3, gamma: float = 0.99):
-        if torch is None or self.net is None:
+        if torch is None or self.net is None or self.target_net is None:
             return
         opt = optim.Adam(self.net.parameters(), lr=lr)
         for _ in range(epochs):
@@ -287,9 +314,9 @@ class LearningAgent:
                 best_val = None
                 with torch.no_grad():
                     for (cmd, ns, nt) in next_candidates:
-                        Avec = featurize_action(next_state_raw, ns, nt) if cmd == 1 else np.zeros(9, dtype=np.float32)
+                        Avec = featurize_action(next_state_raw, cmd, ns, nt)
                         xin = torch.from_numpy(np.concatenate([svec, Avec]).astype(np.float32)).float().to(self.device)
-                        q = self.net(xin.unsqueeze(0)).item()
+                        q = self.target_net(xin.unsqueeze(0)).item()
                         if best_val is None or q > best_val:
                             best_val = q
                 next_q = 0.0 if best_val is None else float(best_val)
@@ -299,6 +326,11 @@ class LearningAgent:
             opt.zero_grad()
             loss.backward()
             opt.step()
+            # soft update target network
+            with torch.no_grad():
+                for tp, p in zip(self.target_net.parameters(), self.net.parameters()):
+                    tp.data.copy_(tp.data * (1.0 - self.target_tau) + p.data * self.target_tau)
+            self._train_steps += 1
 
     def save(self, path: str):
         if torch is None or self.net is None:

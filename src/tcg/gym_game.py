@@ -77,6 +77,8 @@ class GymGame:
         self.isGameOver_loop = False
         self.Overed = False
         self.done = False
+        # Count invalid deliver attempts to penalize in RL env
+        self.invalid_delivers = 0
 
     def draw_fortress(self):
         """Draw fortresses on screen."""
@@ -198,7 +200,8 @@ class GymGame:
         """Create spawn point for pawns."""
         if team == self.state[from_][0] and self.state[from_][3] >= 2:
             if A_coordinate[from_][to] == 0:
-                print(f"team: {team}")
+                # invalid edge; count and exit
+                self.invalid_delivers += 1
                 return 0
             pos = [
                 pos_fortress[from_][0] + A_coordinate[from_][to][0] * 42,

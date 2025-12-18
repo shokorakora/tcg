@@ -5,7 +5,7 @@ from gymnasium import spaces
 
 from tcg.gym_game import GymGame
 from tcg.controller import Controller
-from tcg.config import fortress_limit, A_fortress_set, n_fortress
+from tcg.config import fortress_limit, A_fortress_set, n_fortress, SPEEDRATE
 
 class GymController(Controller):
     """A controller that takes actions from an external source."""
@@ -117,10 +117,13 @@ class TCGEnv(gym.Env):
         # If we execute 1 step, the game will be very slow for the agent (50000 steps total).
         # Let's execute SPEEDRATE steps (one visual frame).
         
-        steps_to_run = 40 # SPEEDRATE
+        steps_to_run = SPEEDRATE
         
         prev_blue_fortresses = self.game.Blue_fortress
         prev_red_fortresses = self.game.Red_fortress
+        prev_state_team = [s[0] for s in self.game.state]
+        prev_state_lvl = [s[2] for s in self.game.state]
+        prev_invalid = self.game.invalid_delivers
         
         for _ in range(steps_to_run):
             if not self.game.process_step():
@@ -139,17 +142,45 @@ class TCGEnv(gym.Env):
         
         # 2. Shaping: Fortress Count Difference
         # Reward for capturing, penalty for losing
-        # We need to track changes.
-        # Game updates Blue_fortress/Red_fortress in CheckGameOver which is called in process_step
+        # Compare previous vs current team ownership per fortress
+        prev_team = prev_state_team
+        curr_team = [s[0] for s in self.game.state]
+        prev_lvl = prev_state_lvl
+        curr_lvl = [s[2] for s in self.game.state]
+        neutral_to_blue = 0
+        enemy_to_blue = 0
+        blue_to_neutral = 0
+        blue_to_enemy = 0
+        blue_upgrades = 0
+        for i in range(12):
+            if prev_team[i] == 0 and curr_team[i] == 1:
+                neutral_to_blue += 1
+            elif prev_team[i] == 2 and curr_team[i] == 1:
+                enemy_to_blue += 1
+            elif prev_team[i] == 1 and curr_team[i] == 0:
+                blue_to_neutral += 1
+            elif prev_team[i] == 1 and curr_team[i] == 2:
+                blue_to_enemy += 1
+            if prev_team[i] == 1 and curr_team[i] == 1 and curr_lvl[i] > prev_lvl[i]:
+                blue_upgrades += 1
         
         current_blue = 0
         current_red = 0
         for s in self.game.state:
             if s[0] == 1: current_blue += 1
             elif s[0] == 2: current_red += 1
-            
-        # Simple shaping: Reward = (My Fortresses - Enemy Fortresses) * 0.1
+        # Base shaping on current advantage
         reward += (current_blue - current_red) * 0.1
+        # Event shaping for transitions
+        reward += neutral_to_blue * 2.0
+        reward += enemy_to_blue * 3.0
+        reward -= blue_to_neutral * 2.0
+        reward -= blue_to_enemy * 3.0
+        # Upgrade completions yield small rewards
+        reward += blue_upgrades * 0.5
+        # Penalize invalid delivers during this frame
+        invalid_delta = self.game.invalid_delivers - prev_invalid
+        reward -= invalid_delta * 0.5
         
         # 3. Shaping: Total Troops?
         

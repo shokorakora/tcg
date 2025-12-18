@@ -17,22 +17,27 @@ import random
 import numpy as np
 import os
 
-def choose_opponent():
-    # simple opponent pool
+def choose_opponent(weights=None):
+    # weighted sampling to see Claude more often while keeping diversity
     pool = [RandomPlayer, ClaudePlayer, DefensiveEconomist]
-    return random.choice(pool)
+    # default bias: increase Claude exposure (0.65) with some diversity
+    default_weights = [0.15, 0.65, 0.20]
+    w = default_weights if weights is None else list(weights)
+    return random.choices(pool, weights=w, k=1)[0]
 
-def run(n_episodes: int = 100, save_every: int = 50):
+def run(n_episodes: int = 100, save_every: int = 50, epsilon_min: float = 0.02, tau: float = 0.01, opponent_weights=None):
     agent = LearningAgent()
+    # allow tuning target network soft-update rate
+    agent.target_tau = tau
     for ep in range(1, n_episodes+1):
-        Opp = choose_opponent()
+        Opp = choose_opponent(opponent_weights)
         env = TCGEnv(Opp)
         obs, _ = env.reset()
         done = False
         truncated = False
         steps = 0
-        # small per-episode epsilon decay
-        agent.epsilon = max(0.05, agent.epsilon * 0.995)
+        # small per-episode epsilon decay with configurable floor
+        agent.epsilon = max(epsilon_min, agent.epsilon * 0.995)
         while not (done or truncated):
             # access raw state from env.game
             raw_state = env.game.state
@@ -46,9 +51,9 @@ def run(n_episodes: int = 100, save_every: int = 50):
             next_raw_state = env.game.state
             # observe
             cur_feat = featurize_state(raw_state)
-            # build action feature vector
+            # build action feature vector (supports upgrade and move)
             cmd, s, t = action
-            act_feat = featurize_action(raw_state, s, t) if cmd == 1 else np.zeros(9, dtype=np.float32)
+            act_feat = featurize_action(raw_state, cmd, s, t)
             agent.observe(cur_feat, act_feat, reward, next_raw_state, done)
             steps += 1
             # training step every 32 samples
