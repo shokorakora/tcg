@@ -12,9 +12,9 @@ if __name__ == "__main__":
     print("=== TakeishiPlayer (Blue) vs ClaudePlayer (Red) ===")
 
     # デフォルト: ウィンドウ表示あり
-    #Game(TakeishiPlayer(), ClaudePlayer()).run()
+    Game(TakeishiPlayer(), ClaudePlayer()).run()
 
     # ウィンドウ表示なし（高速実行）の場合:
-    Game(TakeishiPlayer(), ClaudePlayer(), window=False).run()
+    #Game(TakeishiPlayer(), ClaudePlayer(), window=False).run()
 
     pygame.quit()
