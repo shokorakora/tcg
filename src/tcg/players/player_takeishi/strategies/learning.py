@@ -130,6 +130,34 @@ def heuristic_fallback(state) -> Tuple[int,int,int]:
         return (0,0,0)
     # Prefer sending from the fort with most pawns
     my_forts_sorted = sorted(my_forts, key=lambda i: state[i][3], reverse=True)
+    # Target-first plan: ensure 9 and 11 are captured and upgraded to 5 early
+    targets = [9, 11]
+    from tcg.config import fortress_limit
+    for tgt in targets:
+        t_team, _, t_lvl, t_pawns, t_upg, t_neighbors = state[tgt]
+        # If we own the target and can upgrade now, do it first
+        if t_team == 1 and t_lvl < 5 and t_upg == -1:
+            need = max(1, fortress_limit[t_lvl] // 3)
+            if t_pawns >= need:
+                return (2, tgt, tgt)
+            # If lacking pawns, feed from strongest adjacent owned donor
+            donors = [n for n in t_neighbors if state[n][0] == 1 and state[n][3] >= 3]
+            if donors:
+                donor = max(donors, key=lambda n: state[n][3])
+                return (1, donor, tgt)
+        # If we don't own it, try adjacent capture from strongest owned neighbor
+        if t_team != 1:
+            adj_my = [s for s in t_neighbors if state[s][0] == 1]
+            best = None
+            for s in adj_my:
+                half_send = state[s][3] // 2
+                needed = t_pawns + t_lvl * 2 + 1
+                if half_send >= needed:
+                    # prefer the largest sender
+                    if best is None or state[s][3] > state[best][3]:
+                        best = s
+            if best is not None:
+                return (1, best, tgt)
     # Priority plan: capture 9, then 11 from 10 if feasible
     if 10 in my_forts_sorted:
         s = 10
@@ -140,8 +168,7 @@ def heuristic_fallback(state) -> Tuple[int,int,int]:
                 half_send = state[s][3] // 2
                 if half_send >= needed and d_team != 1:
                     return (1, s, target)
-    # 0) Upgrade if possible
-    from tcg.config import fortress_limit
+    # 0) Upgrade if possible (generic)
     for s in my_forts_sorted:
         team, kind, lvl, pawns, upg, _ = state[s]
         if upg == -1 and 1 <= lvl <= 4 and pawns >= fortress_limit[lvl] // 2:

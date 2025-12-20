@@ -8,6 +8,8 @@ import argparse
 from tcg.game import Game
 from tcg.controller import Controller
 from tcg.players.claude_player import ClaudePlayer
+from tcg.players.sample_random import RandomPlayer
+from tcg.players.strategy_economist import DefensiveEconomist
 from tcg.players.player_takeishi.strategies.learning import LearningAgent
 
 class LearningController(Controller):
@@ -24,6 +26,7 @@ def main():
     ap.add_argument("--model", type=str, default="models/takeishi_final.pt")
     ap.add_argument("--episodes", type=int, default=10)
     ap.add_argument("--window", type=str, default="False")
+    ap.add_argument("--opponent", type=str, default="claude", choices=["claude","random","economist"]) 
     args = ap.parse_args()
     window = (args.window.lower() == "true")
 
@@ -33,7 +36,12 @@ def main():
         # deterministic evaluation
         agent.epsilon = 0.0
         blue = LearningController(agent)
-        red = ClaudePlayer()
+        if args.opponent == "claude":
+            red = ClaudePlayer()
+        elif args.opponent == "random":
+            red = RandomPlayer()
+        else:
+            red = DefensiveEconomist()
         g = Game(blue, red, window=window)
         g.run()
         print(f"Episode {i+1}: winner={g.win_team}")

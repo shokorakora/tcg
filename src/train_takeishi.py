@@ -3,11 +3,12 @@ Minimal training runner for Takeishi LearningAgent using TCGEnv.
 
 Usage:
   .venv\Scripts\Activate.ps1
-  python src\train_takeishi.py
+    python src\train_takeishi.py --episodes 500 --save-every 50 --epsilon-min 0.02 --tau 0.01 --weights 0.15,0.65,0.20
 
 This script runs episodes against a sampled opponent from the pool and
 trains the LearningAgent from collected experiences.
 """
+import argparse
 from tcg.gym_env import TCGEnv
 from tcg.players.sample_random import RandomPlayer
 from tcg.players.claude_player import ClaudePlayer
@@ -31,7 +32,17 @@ def run(n_episodes: int = 100, save_every: int = 50, epsilon_min: float = 0.02, 
     agent.target_tau = tau
     for ep in range(1, n_episodes+1):
         Opp = choose_opponent(opponent_weights)
+        # strict whitelist enforcement: prevent accidental usage of disallowed players
+        allowed_names = {RandomPlayer.__name__, ClaudePlayer.__name__, DefensiveEconomist.__name__}
+        if getattr(Opp, "__name__", None) not in allowed_names:
+            raise ValueError(f"Disallowed opponent selected: {Opp}. Allowed: {sorted(allowed_names)}")
         env = TCGEnv(Opp)
+        # log chosen opponent for transparency (explicitly excludes ml_player/players_kishida)
+        try:
+            opp_name = Opp.__name__
+        except Exception:
+            opp_name = str(Opp)
+        print(f"Episode {ep} using opponent: {opp_name}")
         obs, _ = env.reset()
         done = False
         truncated = False
@@ -68,4 +79,26 @@ def run(n_episodes: int = 100, save_every: int = 50, epsilon_min: float = 0.02, 
     agent.save("models/takeishi_final.pt")
 
 if __name__ == '__main__':
-    run()
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--episodes', type=int, default=100)
+    ap.add_argument('--save-every', type=int, default=50)
+    ap.add_argument('--epsilon-min', type=float, default=0.02)
+    ap.add_argument('--tau', type=float, default=0.01)
+    ap.add_argument('--weights', type=str, default=None, help='Comma-separated weights for opponents e.g. 0.15,0.65,0.20')
+    args = ap.parse_args()
+
+    def parse_weights(ws: str | None):
+        if not ws:
+            return None
+        parts = [p.strip() for p in ws.split(',')]
+        if len(parts) != 3:
+            raise ValueError('weights must have three comma-separated numbers for [Random, Claude, Economist].')
+        return [float(p) for p in parts]
+
+    run(
+        n_episodes=args.episodes,
+        save_every=args.save_every,
+        epsilon_min=args.epsilon_min,
+        tau=args.tau,
+        opponent_weights=parse_weights(args.weights)
+    )

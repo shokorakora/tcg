@@ -66,6 +66,7 @@ class TakeishiPlayer(Controller):
         _, _, src_level, src_pawns, src_upg_time, src_neighbors = state[src]
 
         # 0) If any fort is ready to upgrade but lacks required pawns, feed it first.
+        # Prefer feeding targets (9,11) to reach level 5 sooner.
         lacking = []
         for j in my_forts:
             t, _, lvl, pawns, upg_time, _ = state[j]
@@ -74,10 +75,12 @@ class TakeishiPlayer(Controller):
             if upg_time < 0:
                 need = max(1, fortress_limit[lvl] // 3)
                 if pawns < need:
-                    lacking.append((lvl, pawns, j, need))
+                    # priority: targets first, then lowest level, then lowest pawns
+                    is_target = 0 if j in self.targets else 1
+                    lacking.append((is_target, lvl, pawns, j, need))
         if lacking:
-            lacking.sort()  # lowest level, then lowest pawns
-            lvl, pawns, recv, need = lacking[0]
+            lacking.sort()  # targets first (is_target=0), then lowest level, then lowest pawns
+            _, lvl, pawns, recv, need = lacking[0]
             donors = [n for n in state[recv][5] if state[n][0] == 1 and n != recv and state[n][3] >= 3]
             if donors:
                 # pick the strongest donor
@@ -102,10 +105,12 @@ class TakeishiPlayer(Controller):
                 continue
             need = max(1, fortress_limit[lvl] // 3)
             if pawns >= need:
-                upg_candidates.append((lvl, -pawns, j))
+                # priority: targets first, then lowest level, then highest pawns
+                is_target = 0 if j in self.targets else 1
+                upg_candidates.append((is_target, lvl, -pawns, j))
         if upg_candidates:
             upg_candidates.sort()
-            _, _, subj = upg_candidates[0]
+            _, _, _, subj = upg_candidates[0]
             self.metrics["upgrade"] += 1
             return (2, subj, 0)
 
