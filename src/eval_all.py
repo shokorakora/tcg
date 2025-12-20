@@ -16,6 +16,12 @@ from tcg.players.strategy_economist import DefensiveEconomist
 from tcg.players.strategy_splitpush import SplitPusher
 from tcg.players.strategy_harasser import Harasser
 from tcg.players.strategy_bulwark import Bulwark
+from tcg.players.strategy_anchor import Anchor
+from tcg.players.strategy_feeder import Feeder
+from tcg.players.strategy_rusher import Rusher
+from tcg.players.strategy_opportunist import Opportunist
+from tcg.players.strategy_counter import Counter
+from tcg.players.strategy_flow import Flow
 from tcg.players.player_takeishi.strategies.learning import LearningAgent
 from tcg import config as cfg
 
@@ -35,6 +41,12 @@ OPPONENTS = {
     "splitpush": SplitPusher,
     "harasser": Harasser,
     "bulwark": Bulwark,
+    "anchor": Anchor,
+    "feeder": Feeder,
+    "rusher": Rusher,
+    "opportunist": Opportunist,
+    "counter": Counter,
+    "flow": Flow,
 }
 
 def eval_vs(opponent_name: str, episodes: int, model: str, window: bool, results_path: str | None = None):

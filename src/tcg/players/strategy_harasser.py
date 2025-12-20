@@ -17,6 +17,30 @@ class Harasser(Controller):
         if not my_forts:
             return 0, 0, 0
 
+        # 0) 初期ブートストラップ: 自拠点が少ない序盤は自要塞をLv4まで優先アップグレード
+        if len(my_forts) <= 2:
+            for i in my_forts:
+                lvl = state[i][2]
+                if lvl < 4 and state[i][4] == -1:
+                    limit = fortress_limit[lvl]
+                    if state[i][3] >= limit // 2:
+                        return 2, i, 0
+
+        # 0) 早期中立制圧（待ちにならないよう初動で動く）
+        for i in my_forts:
+            lvl = state[i][2]
+            limit = fortress_limit[lvl]
+            neighbors = state[i][5]
+            neutrals = [n for n in neighbors if state[n][0] == 0]
+            if neutrals and state[i][3] >= int(limit * 0.65):
+                half_send = state[i][3] // 2
+                dmg = 0.95 if state[i][1] == 1 else 0.65
+                # 半分送って削り量が目標兵力を上回る最弱中立へ
+                viable = [n for n in neutrals if (half_send * dmg) > state[n][3]]
+                if viable:
+                    target = min(viable, key=lambda n: state[n][3])
+                    return 1, i, target
+
         # 1) 軽アップグレード: 前線に隣接している自要塞を優先
         for i in my_forts:
             lvl = state[i][2]
@@ -34,18 +58,24 @@ class Harasser(Controller):
             enemies = [n for n in neighbors if state[n][0] == 2]
             if not enemies:
                 continue
-            # 攻撃可能条件: 自分の兵力がレベル上限の50%以上
+            # 攻撃可能条件: 自分の兵力がレベル上限の70%以上、かつ半分送って上回れる
             limit = fortress_limit[state[i][2]]
-            if state[i][3] >= int(limit * 0.5):
+            if state[i][3] >= int(limit * 0.7):
                 # まずアップグレード中の敵
                 upgrading = [n for n in enemies if state[n][4] != -1]
                 weak = sorted(enemies, key=lambda n: state[n][3])
                 target = None
                 if upgrading:
                     # アップグレード中なら優先妨害
-                    target = min(upgrading, key=lambda n: state[n][3])
+                    cand = min(upgrading, key=lambda n: state[n][3])
+                    dmg = 0.95 if state[i][1] == 1 else 0.65
+                    if (state[i][3] // 2) * dmg > (state[cand][3] + 2):
+                        target = cand
                 elif weak:
-                    target = weak[0]
+                    cand = weak[0]
+                    dmg = 0.95 if state[i][1] == 1 else 0.65
+                    if (state[i][3] // 2) * dmg > (state[cand][3] + 2):
+                        target = cand
                 if target is not None:
                     return 1, i, target
 
@@ -54,8 +84,8 @@ class Harasser(Controller):
             enemy_adj = any(state[n][0] == 2 for n in state[i][5])
             lvl = state[i][2]
             limit = fortress_limit[lvl]
-            # 敵がいない安全後方で70%以上なら、前線味方へ再配置
-            if not enemy_adj and state[i][3] >= int(limit * 0.7):
+            # 敵がいない安全後方で85%以上なら、前線味方へ再配置（ちまちま送らない）
+            if not enemy_adj and state[i][3] >= int(limit * 0.85):
                 allies = [n for n in state[i][5] if state[n][0] == 1]
                 if allies:
                     # 前線（敵隣接）を優先
