@@ -101,6 +101,9 @@ A_fortress_set = [
 fortress_limit = [10, 10, 20, 30, 40, 50]
 fortress_cool = [[60, 60, 54, 48, 42, 35], [90, 90, 81, 72, 63, 54]]
 
+# Logging verbosity
+QUIET = False
+
 # Swap numbers for perspective
 swap_number_l = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
 swap_number_d = {i: swap_number_l[i] for i in range(len(swap_number_l))}

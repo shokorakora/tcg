@@ -20,6 +20,7 @@ from .config import (
     pos_fortress,
     swap_number_l,
 )
+from . import config as cfg
 from .controller import Controller
 from .utils import flip_board_view
 
@@ -196,7 +197,8 @@ class Game:
         """Create spawn point for pawns."""
         if team == self.state[from_][0] and self.state[from_][3] >= 2:
             if A_coordinate[from_][to] == 0:
-                print(f"team: {team}")
+                if not cfg.QUIET:
+                    print(f"team: {team}")
                 return 0
             pos = [
                 pos_fortress[from_][0] + A_coordinate[from_][to][0] * 42,
@@ -343,21 +345,23 @@ class Game:
             if self.isGameOver or self.step > STEPLIMIT:
                 if self.Overed:
                     break
-                print(
-                    f"step: {self.step}  time: {int(self.seconds)}  //  "
-                    f"{self.win_team} Win!!   B: {self.Blue_fortress}   R: {self.Red_fortress}"
-                )
+                if not cfg.QUIET:
+                    print(
+                        f"step: {self.step}  time: {int(self.seconds)}  //  "
+                        f"{self.win_team} Win!!   B: {self.Blue_fortress}   R: {self.Red_fortress}"
+                    )
                 break
 
             for _ in range(int(SPEEDRATE)):
                 if self.isGameOver or self.step >= STEPLIMIT or self.isGameOver_loop or self.done:
                     self.Overed = True
                     self.isGameOver = True
-                    print(
-                        f"step: {self.step}  time: {int(self.seconds)}  //  "
-                        f"{self.win_team} Win!!   B: {self.Blue_fortress}   "
-                        f"R: {self.Red_fortress}   loop"
-                    )
+                    if not cfg.QUIET:
+                        print(
+                            f"step: {self.step}  time: {int(self.seconds)}  //  "
+                            f"{self.win_team} Win!!   B: {self.Blue_fortress}   "
+                            f"R: {self.Red_fortress}   loop"
+                        )
                     break
 
                 if self.check_event(pygame.QUIT):

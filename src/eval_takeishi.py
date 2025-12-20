@@ -5,6 +5,7 @@ Usage:
   python src\eval_takeishi.py --model models\takeishi_final.pt --episodes 10 --window False
 """
 import argparse
+from tcg import config as cfg
 from tcg.game import Game
 from tcg.controller import Controller
 from tcg.players.claude_player import ClaudePlayer
@@ -27,8 +28,10 @@ def main():
     ap.add_argument("--episodes", type=int, default=10)
     ap.add_argument("--window", type=str, default="False")
     ap.add_argument("--opponent", type=str, default="claude", choices=["claude","random","economist"]) 
+    ap.add_argument("--quiet", type=str, default="True")
     args = ap.parse_args()
     window = (args.window.lower() == "true")
+    cfg.QUIET = (args.quiet.lower() == "true")
 
     wins = 0
     for i in range(args.episodes):

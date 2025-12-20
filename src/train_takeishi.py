@@ -13,6 +13,9 @@ from tcg.gym_env import TCGEnv
 from tcg.players.sample_random import RandomPlayer
 from tcg.players.claude_player import ClaudePlayer
 from tcg.players.strategy_economist import DefensiveEconomist
+from tcg.players.strategy_splitpush import SplitPusher
+from tcg.players.strategy_harasser import Harasser
+from tcg.players.strategy_bulwark import Bulwark
 from tcg.players.player_takeishi.strategies.learning import LearningAgent, featurize_state, featurize_action, generate_action_candidates
 import random
 import numpy as np
@@ -20,10 +23,12 @@ import os
 
 def choose_opponent(weights=None):
     # weighted sampling to see Claude more often while keeping diversity
-    pool = [RandomPlayer, ClaudePlayer, DefensiveEconomist]
-    # default bias: increase Claude exposure (0.65) with some diversity
-    default_weights = [0.15, 0.65, 0.20]
+    pool = [RandomPlayer, ClaudePlayer, DefensiveEconomist, SplitPusher, Harasser, Bulwark]
+    # default bias: emphasize strong diverse opponents
+    default_weights = [0.10, 0.45, 0.20, 0.10, 0.10, 0.05]
     w = default_weights if weights is None else list(weights)
+    if len(w) != len(pool):
+        raise ValueError(f"weights must have {len(pool)} values (got {len(w)}). Order: [Random, Claude, Economist, SplitPush, Harasser, Bulwark]")
     return random.choices(pool, weights=w, k=1)[0]
 
 def run(n_episodes: int = 100, save_every: int = 50, epsilon_min: float = 0.02, tau: float = 0.01, opponent_weights=None):
@@ -33,7 +38,7 @@ def run(n_episodes: int = 100, save_every: int = 50, epsilon_min: float = 0.02, 
     for ep in range(1, n_episodes+1):
         Opp = choose_opponent(opponent_weights)
         # strict whitelist enforcement: prevent accidental usage of disallowed players
-        allowed_names = {RandomPlayer.__name__, ClaudePlayer.__name__, DefensiveEconomist.__name__}
+        allowed_names = {RandomPlayer.__name__, ClaudePlayer.__name__, DefensiveEconomist.__name__, SplitPusher.__name__, Harasser.__name__, Bulwark.__name__}
         if getattr(Opp, "__name__", None) not in allowed_names:
             raise ValueError(f"Disallowed opponent selected: {Opp}. Allowed: {sorted(allowed_names)}")
         env = TCGEnv(Opp)
@@ -84,15 +89,16 @@ if __name__ == '__main__':
     ap.add_argument('--save-every', type=int, default=50)
     ap.add_argument('--epsilon-min', type=float, default=0.02)
     ap.add_argument('--tau', type=float, default=0.01)
-    ap.add_argument('--weights', type=str, default=None, help='Comma-separated weights for opponents e.g. 0.15,0.65,0.20')
+    ap.add_argument('--weights', type=str, default=None, help='Comma-separated weights for opponents [Random, Claude, Economist, SplitPush, Harasser, Bulwark]')
     args = ap.parse_args()
 
     def parse_weights(ws: str | None):
         if not ws:
             return None
         parts = [p.strip() for p in ws.split(',')]
-        if len(parts) != 3:
-            raise ValueError('weights must have three comma-separated numbers for [Random, Claude, Economist].')
+        # dynamic length based on pool size
+        if len(parts) != 6:
+            raise ValueError('weights must have six comma-separated numbers for [Random, Claude, Economist, SplitPush, Harasser, Bulwark].')
         return [float(p) for p in parts]
 
     run(

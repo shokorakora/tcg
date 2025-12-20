@@ -16,6 +16,7 @@ import random
 import collections
 from typing import List, Tuple, Optional
 import numpy as np
+from tcg import config as cfg
 
 try:
     import torch
@@ -253,6 +254,7 @@ class LearningAgent:
         self._train_steps = 0
         self.target_tau = 0.01  # soft update rate
         if torch is not None:
+            from tcg import config as cfg
             # input is state(6) + action(9) = 15 dims
             self.net = QNet(inp_dim=15).to(self.device)
             self.target_net = QNet(inp_dim=15).to(self.device)
@@ -276,7 +278,7 @@ class LearningAgent:
         # if no model or explore, pick random
         if self.net is None or (torch is not None and random.random() < self.epsilon):
             cmd,s,t = random.choice(candidates)
-            if self._debug_prints < 10:
+            if not cfg.QUIET and self._debug_prints < 10:
                 print(f"[RL] random action: {(cmd,s,t)} from {len(candidates)} candidates")
                 self._debug_prints += 1
             return (cmd, s, t)
@@ -297,17 +299,18 @@ class LearningAgent:
         if best_action is None or (len(vals) > 0 and (max(vals) - min(vals)) < 1e-5):
             fall = heuristic_fallback(state)
             if fall != (0,0,0):
-                if self._debug_prints < 10:
+                if not cfg.QUIET and self._debug_prints < 10:
                     print(f"[RL] heuristic fallback: {fall} (spread={0.0 if not vals else max(vals)-min(vals):.2e})")
                     self._debug_prints += 1
                 return fall
             cmd,s,t = random.choice(candidates)
-            if self._debug_prints < 10:
+            if not cfg.QUIET and self._debug_prints < 10:
                 print(f"[RL] random tie-break: {(cmd,s,t)}")
                 self._debug_prints += 1
             return (cmd,s,t)
         if self._debug_prints < 10:
-            print(f"[RL] greedy action: {best_action} (spread={max(vals)-min(vals):.2e})")
+            if not cfg.QUIET:
+                print(f"[RL] greedy action: {best_action} (spread={max(vals)-min(vals):.2e})")
             self._debug_prints += 1
         return best_action
 
