@@ -43,7 +43,7 @@ class TakeishiPlayer(Controller):
         # periodic metrics snapshot regardless of branch
         if self.step % 600 == 0:
             m = self.metrics
-            print(f"[Takeishi] METRICS step{self.step}: winrate=N/A, idle={m['idle']}, atk={m['attack']}, gatk={m['global_attack']}, conc={m['concentrate']}, exp={m['expand']}, rprobe={m['rear_probe']}, rforw={m['rear_forward']}, mob={m['mobilize']}")
+            # print(f"[Takeishi] METRICS step{self.step}: winrate=N/A, idle={m['idle']}, atk={m['attack']}, gatk={m['global_attack']}, conc={m['concentrate']}, exp={m['expand']}, rprobe={m['rear_probe']}, rforw={m['rear_forward']}, mob={m['mobilize']}")
 
         # if game ended, emit final metrics snapshot once and no-op
         if done:
@@ -89,7 +89,7 @@ class TakeishiPlayer(Controller):
                 if self.last_sent.get(key, -9999) + self.send_cooldown <= self.step:
                     self.last_sent[key] = self.step
                     self.idle_steps = 0
-                    print(f"[Takeishi] step{self.step} FEED_UPGRADE from {donor} -> {recv} (need:{need}, p_donor:{state[donor][3]}, p_recv:{pawns})")
+                    # print(f"[Takeishi] step{self.step} FEED_UPGRADE from {donor} -> {recv} (need:{need}, p_donor:{state[donor][3]}, p_recv:{pawns})")
                     self.metrics["concentrate"] += 1
                     return (1, donor, recv)
 
@@ -167,7 +167,7 @@ class TakeishiPlayer(Controller):
                     self.pair_hits[key] = (cnt + 1 if self.step - last <= 50 else 1, self.step)
                     self.last_sent[key] = self.step
                     self.idle_steps = 0
-                    print(f"[Takeishi] step{self.step} ATTACK from {s} -> enemy {candidate} (p:{s_pawns})")
+                    # print(f"[Takeishi] step{self.step} ATTACK from {s} -> enemy {candidate} (p:{s_pawns})")
                     self.metrics["attack"] += 1
                     return (1, s, candidate)
 
@@ -189,7 +189,7 @@ class TakeishiPlayer(Controller):
                     self.last_sent[key] = self.step
                     self.idle_steps = 0
                     self.last_global_attack_step = self.step
-                    print(f"[Takeishi] step{self.step} GLOBAL_ATTACK from {src} -> enemy {candidate} (p:{src_pawns})")
+                    # print(f"[Takeishi] step{self.step} GLOBAL_ATTACK from {src} -> enemy {candidate} (p:{src_pawns})")
                     self.metrics["global_attack"] += 1
                     return (1, src, candidate)
 
@@ -216,7 +216,7 @@ class TakeishiPlayer(Controller):
                     if self.last_sent.get(key, -9999) + self.send_cooldown <= self.step:
                         self.last_sent[key] = self.step
                         self.idle_steps = 0
-                        print(f"[Takeishi] step{self.step} CONCENTRATE from {src} -> {recv} (p:{src_pawns})")
+                        # print(f"[Takeishi] step{self.step} CONCENTRATE from {src} -> {recv} (p:{src_pawns})")
                         self.metrics["concentrate"] += 1
                         return (1, src, recv)
 
@@ -234,7 +234,7 @@ class TakeishiPlayer(Controller):
                     if self.last_sent.get(key, -9999) + self.send_cooldown <= self.step:
                         self.last_sent[key] = self.step
                         self.idle_steps = 0
-                        print(f"[Takeishi] step{self.step} REAR_PROBE from {f} -> neutral 8 (p:{f_pawns})")
+                        # print(f"[Takeishi] step{self.step} REAR_PROBE from {f} -> neutral 8 (p:{f_pawns})")
                         self.metrics["rear_probe"] += 1
                         return (1, f, 8)
                 # else forward to weakest neighboring frontline or lower-pawn own neighbor
@@ -246,7 +246,7 @@ class TakeishiPlayer(Controller):
                         if self.last_sent.get(key, -9999) + self.send_cooldown <= self.step:
                             self.last_sent[key] = self.step
                             self.idle_steps = 0
-                            print(f"[Takeishi] step{self.step} REAR_FORWARD from {f} -> {recv} (p:{f_pawns})")
+                            # print(f"[Takeishi] step{self.step} REAR_FORWARD from {f} -> {recv} (p:{f_pawns})")
                             self.metrics["rear_forward"] += 1
                             return (1, f, recv)
 
@@ -272,7 +272,7 @@ class TakeishiPlayer(Controller):
                     if self.last_sent.get(key, -9999) + self.send_cooldown <= self.step:
                         self.last_sent[key] = self.step
                         self.idle_steps = 0
-                        print(f"[Takeishi] step{self.step} EXPAND from {s} -> neutral {target} (p:{s_pawns})")
+                        # print(f"[Takeishi] step{self.step} EXPAND from {s} -> neutral {target} (p:{s_pawns})")
                         self.metrics["expand"] += 1
                         return (1, s, target)
 
@@ -288,7 +288,7 @@ class TakeishiPlayer(Controller):
                         continue
                     if frontlines and s not in frontlines:
                         recv = frontlines[0]
-                        print(f"[Takeishi] step{self.step} MOBILIZE from {s} -> {recv} (p:{state[s][3]})")
+                        # print(f"[Takeishi] step{self.step} MOBILIZE from {s} -> {recv} (p:{state[s][3]})")
                         self.metrics["mobilize"] += 1
                         self.idle_steps = 0
                         return (1, s, recv)
@@ -298,7 +298,7 @@ class TakeishiPlayer(Controller):
                     for s in my_forts:
                         if state[s][3] >= 2:
                             weakest = min(enemies, key=lambda n: (state[n][3] + state[n][2] * 5))
-                            print(f"[Takeishi] step{self.step} PROBE from {s} -> enemy {weakest} (p:{state[s][3]})")
+                            # print(f"[Takeishi] step{self.step} PROBE from {s} -> enemy {weakest} (p:{state[s][3]})")
                             self.metrics["probe_enemy"] += 1
                             self.idle_steps = 0
                             return (1, s, weakest)
@@ -315,12 +315,12 @@ class TakeishiPlayer(Controller):
                                 target = n
                                 break
                         if target is not None:
-                            print(f"[Takeishi] step{self.step} PROBE_NEUTRAL from {src} -> {target} (p:{src_pawns})")
+                            # print(f"[Takeishi] step{self.step} PROBE_NEUTRAL from {src} -> {target} (p:{src_pawns})")
                             self.metrics["probe_neutral"] += 1
                             self.idle_steps = 0
                             return (1, src, target)
 
-            print(f"[Takeishi] step{self.step} IDLE (no actions)")
+            # print(f"[Takeishi] step{self.step} IDLE (no actions)")
             self.metrics["idle"] += 1
             return (0, 0, 0)
 
@@ -366,7 +366,7 @@ class TakeishiPlayer(Controller):
                 if self.last_sent.get(key, -9999) + self.send_cooldown <= self.step:
                     self.last_sent[key] = self.step
                     self.idle_steps = 0
-                    print(f"[Takeishi] step{self.step} STAGE_ATTACK from {donor} -> {target} (p:{state[donor][3]})")
+                    # print(f"[Takeishi] step{self.step} STAGE_ATTACK from {donor} -> {target} (p:{state[donor][3]})")
                     self.metrics["attack"] += 1
                     return (1, donor, target)
 
@@ -387,7 +387,7 @@ class TakeishiPlayer(Controller):
                     if self.last_sent.get(key, -9999) + self.send_cooldown <= self.step:
                         self.last_sent[key] = self.step
                         self.idle_steps = 0
-                        print(f"[Takeishi] step{self.step} FALLBACK_EXPAND from {s} -> neutral {n} (p:{s_pawns})")
+                        # print(f"[Takeishi] step{self.step} FALLBACK_EXPAND from {s} -> neutral {n} (p:{s_pawns})")
                         self.metrics["expand"] += 1
                         return (1, s, n)
 
@@ -404,7 +404,7 @@ class TakeishiPlayer(Controller):
                 if self.last_sent.get(key, -9999) + self.send_cooldown <= self.step:
                     self.last_sent[key] = self.step
                     self.idle_steps = 0
-                    print(f"[Takeishi] step{self.step} FALLBACK_REAR_PROBE from {f} -> neutral 8 (p:{f_pawns})")
+                    # print(f"[Takeishi] step{self.step} FALLBACK_REAR_PROBE from {f} -> neutral 8 (p:{f_pawns})")
                     self.metrics["rear_probe"] += 1
                     return (1, f, 8)
             own_neighbors = [n for n in state[f][5] if state[n][0] == 1]
@@ -415,7 +415,7 @@ class TakeishiPlayer(Controller):
                     if self.last_sent.get(key, -9999) + self.send_cooldown <= self.step:
                         self.last_sent[key] = self.step
                         self.idle_steps = 0
-                        print(f"[Takeishi] step{self.step} FALLBACK_REAR_FORWARD from {f} -> {recv} (p:{f_pawns})")
+                        # print(f"[Takeishi] step{self.step} FALLBACK_REAR_FORWARD from {f} -> {recv} (p:{f_pawns})")
                         self.metrics["rear_forward"] += 1
                         return (1, f, recv)
 

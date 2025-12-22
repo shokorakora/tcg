@@ -13,22 +13,13 @@ class MLPlayer(Controller):
     def __init__(self, model_path=None):
         if model_path is None:
             # Default path relative to project root
-            # This file is in src/tcg/players/player_ml/ml_player.py
-            # We want src/tcg/players_kishida/tcg_ppo_final.zip
-            # parents[0] = player_ml
+            # This file is in src/tcg/players/players_kishida/ml_player.py
+            # We want src/tcg/players/players_kishida/tcg_ppo_final.zip
+            # parents[0] = players_kishida
             # parents[1] = players
             # parents[2] = tcg
-            tcg_dir = Path(__file__).parents[1]
-            model_path = tcg_dir / "players_kishida/tcg_ppo_finetuned.zip"
-        
-        # Check if model exists
-        if not model_path.exists():
-             print(f"Warning: Model file not found at {model_path}")
-             # Fallback to pretrained if finetuned not found
-             fallback_path = tcg_dir / "players_kishida/tcg_ppo_final.zip"
-             if fallback_path.exists():
-                 print(f"Falling back to {fallback_path}")
-                 model_path = fallback_path
+            tcg_dir = Path(__file__).parents[0]
+            model_path = tcg_dir / "tcg_ppo_finetuned.zip"
         
         # Fix for loading issue: explicitly set policy_class
         try:

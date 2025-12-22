@@ -9,6 +9,7 @@ This script runs episodes against a sampled opponent from the pool and
 trains the LearningAgent from collected experiences.
 """
 import argparse
+import re
 from tcg.gym_env import TCGEnv
 from tcg.players.sample_random import RandomPlayer
 from tcg.players.claude_player import ClaudePlayer
@@ -63,8 +64,16 @@ def choose_opponent(weights=None):
         raise ValueError(f"weights must have {len(pool)} values (got {len(w)}). Order: [Random, Claude, Economist, SplitPush, Harasser, Bulwark, Anchor, Feeder, Rusher, Opportunist, Counter, Flow]")
     return random.choices(pool, weights=w, k=1)[0]
 
-def run(n_episodes: int = 100, save_every: int = 50, epsilon_min: float = 0.02, tau: float = 0.01, opponent_weights=None):
-    agent = LearningAgent()
+def run(n_episodes: int = 100, save_every: int = 50, epsilon_min: float = 0.02, tau: float = 0.01, opponent_weights=None, resume_from: str | None = None):
+    agent = LearningAgent(model_path=resume_from)
+    start_offset = 0
+    if resume_from:
+        m = re.search(r"ep(\d+)\.pt$", resume_from)
+        if m:
+            try:
+                start_offset = int(m.group(1))
+            except Exception:
+                start_offset = 0
     # allow tuning target network soft-update rate
     agent.target_tau = tau
     for ep in range(1, n_episodes+1):
@@ -110,7 +119,8 @@ def run(n_episodes: int = 100, save_every: int = 50, epsilon_min: float = 0.02, 
         print(f"Episode {ep} finished steps={steps} done={done} truncated={truncated} epsilon={agent.epsilon:.3f}")
         if ep % save_every == 0:
             os.makedirs("models", exist_ok=True)
-            agent.save(f"models/takeishi_ep{ep}.pt")
+            global_ep = start_offset + ep
+            agent.save(f"models/takeishi_ep{global_ep}.pt")
     # final save
     os.makedirs("models", exist_ok=True)
     agent.save("models/takeishi_final.pt")
@@ -122,6 +132,7 @@ if __name__ == '__main__':
     ap.add_argument('--epsilon-min', type=float, default=0.02)
     ap.add_argument('--tau', type=float, default=0.01)
     ap.add_argument('--weights', type=str, default=None, help='Comma-separated weights for opponents [Random, Claude, Economist, SplitPush, Harasser, Bulwark, Anchor, Feeder, Rusher, Opportunist, Counter, Flow]')
+    ap.add_argument('--resume-from', type=str, default=None, help='Path to a saved model to resume training from (e.g., models/takeishi_ep1200.pt)')
     args = ap.parse_args()
 
     def parse_weights(ws: str | None):
@@ -135,5 +146,6 @@ if __name__ == '__main__':
         save_every=args.save_every,
         epsilon_min=args.epsilon_min,
         tau=args.tau,
-        opponent_weights=parse_weights(args.weights)
+        opponent_weights=parse_weights(args.weights),
+        resume_from=args.resume_from
     )
