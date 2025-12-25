@@ -92,10 +92,16 @@ def generate_action_candidates(state) -> List[Tuple[int,int,int]]:
             if neutrals and pawns >= 2:
                 half_send = pawns // 2
                 dmg = 0.95 if kind == 1 else 0.65
-                # add viable neutrals by expected arrival damage
-                for n in neutrals:
-                    if (half_send * dmg) > (state[n][3] + 2):
-                        candidates.append((1, s, n))
+                # Prefer viable neutrals by expected arrival damage (no extra margin)
+                viable = [n for n in neutrals if (half_send * dmg) >= (state[n][3])]
+                if viable:
+                    target = min(viable, key=lambda n: state[n][3])
+                    candidates.append((1, s, target))
+                else:
+                    # If at absolute max capacity, probe weakest neutral to avoid idling
+                    if pawns >= fortress_limit[lvl]:
+                        target = min(neutrals, key=lambda n: state[n][3])
+                        candidates.append((1, s, target))
     # 0) Upgrades where possible
     for s in my_forts:
         team, kind, lvl, pawns, upg, _ = state[s]
