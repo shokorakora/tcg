@@ -82,12 +82,25 @@ def generate_action_candidates(state) -> List[Tuple[int,int,int]]:
     if not my_forts:
         return []
     candidates: List[Tuple[int,int,int]] = []
+    # -1) Neutral fast-path: when a Level 5 source is near full and adjacent neutral exists,
+    #     include neutral capture candidates early to reduce brief idling.
+    from tcg.config import fortress_limit
+    for s in my_forts:
+        team, kind, lvl, pawns, upg, neighbors = state[s]
+        if lvl == 5 and pawns >= int(fortress_limit[lvl] * 0.9):
+            neutrals = [n for n in neighbors if state[n][0] == 0]
+            if neutrals and pawns >= 2:
+                half_send = pawns // 2
+                dmg = 0.95 if kind == 1 else 0.65
+                # add viable neutrals by expected arrival damage
+                for n in neutrals:
+                    if (half_send * dmg) > (state[n][3] + 2):
+                        candidates.append((1, s, n))
     # 0) Upgrades where possible
     for s in my_forts:
         team, kind, lvl, pawns, upg, _ = state[s]
         # upgrade possible: enough pawns, not already upgrading, level 1..4
         # fortress_limit index by level
-        from tcg.config import fortress_limit
         if upg == -1 and 1 <= lvl <= 4 and pawns >= fortress_limit[lvl] // 2:
             candidates.append((2, s, s))
     # 1) Feasible expansions and attacks from owned forts
@@ -96,10 +109,11 @@ def generate_action_candidates(state) -> List[Tuple[int,int,int]]:
         if pawns < 2:
             continue
         half_send = pawns // 2
+        dmg = 0.95 if state[s][1] == 1 else 0.65
         for n in state[s][5]:
             d_team, _, d_lvl, d_pawns, _, _ = state[n]
-            needed = d_pawns + d_lvl * 2 + 1
-            if half_send < needed:
+            # Use expected arrival damage to avoid weak/trickle sends
+            if (half_send * dmg) <= (d_pawns + 2):
                 continue
             if d_team == 0:
                 candidates.append((1, s, n))
@@ -109,12 +123,16 @@ def generate_action_candidates(state) -> List[Tuple[int,int,int]]:
     frontlines = [f for f in my_forts if any(state[n][0] != 1 for n in state[f][5])]
     if frontlines:
         for s in my_forts:
-            if s not in frontlines and state[s][3] >= 2:
-                # concentrate only via adjacent edge to a frontline fortress
-                for n in state[s][5]:
-                    if n in frontlines:
-                        candidates.append((1, s, n))
-                        break
+            if s not in frontlines:
+                lvl = state[s][2]
+                from tcg.config import fortress_limit
+                # only reinforce when near full to avoid trickles
+                if state[s][3] >= int(fortress_limit[lvl] * 0.85):
+                    # concentrate only via adjacent edge to a frontline fortress
+                    for n in state[s][5]:
+                        if n in frontlines:
+                            candidates.append((1, s, n))
+                            break
     # dedupe while preserving order
     seen = set()
     out: List[Tuple[int,int,int]] = []

@@ -9,6 +9,7 @@ import argparse
 from datetime import datetime
 import os
 from tcg.game import Game
+from tcg.config import STEPLIMIT
 from tcg.controller import Controller
 from tcg.players.claude_player import ClaudePlayer
 from tcg.players.sample_random import RandomPlayer
@@ -51,6 +52,10 @@ OPPONENTS = {
 
 def eval_vs(opponent_name: str, episodes: int, model: str, window: bool, results_path: str | None = None):
     wins = 0
+    draws = 0
+    losses = 0
+    timeouts = 0
+    step_total = 0
     for i in range(episodes):
         agent = LearningAgent(model_path=model)
         agent.epsilon = 0.0
@@ -61,9 +66,17 @@ def eval_vs(opponent_name: str, episodes: int, model: str, window: bool, results
         red = Opp()
         g = Game(blue, red, window=window)
         g.run()
+        step_total += g.step
         if g.win_team == "Blue":
             wins += 1
-    summary = f"Opponent={opponent_name} Summary: wins={wins}/{episodes}"
+        elif g.win_team == "Both":
+            draws += 1
+        else:
+            losses += 1
+        if g.step >= STEPLIMIT - 1:
+            timeouts += 1
+    avg_steps = int(step_total / max(1, episodes))
+    summary = f"Opponent={opponent_name} Summary: wins={wins}/{episodes} draws={draws} losses={losses} timeouts={timeouts} avg_steps={avg_steps}"
     print(summary)
     if results_path:
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

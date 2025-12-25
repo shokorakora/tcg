@@ -15,6 +15,7 @@ from tcg.players.strategy_rusher import Rusher
 from tcg.players.strategy_opportunist import Opportunist
 from tcg.players.strategy_counter import Counter
 from tcg.players.strategy_flow import Flow
+from tcg.players.player_rl import RLPlayer
 
 OPTS = {
     "claude": ClaudePlayer,
@@ -35,12 +36,17 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--opponent", type=str, default="claude", choices=list(OPTS.keys()))
     ap.add_argument("--window", type=str, default="True")
+    ap.add_argument("--blue", type=str, default="takeishi", choices=["takeishi", "rl"])
+    ap.add_argument("--model", type=str, default="models/takeishi_final.pt")
     args = ap.parse_args()
     window = (args.window.lower() == "true")
 
     RedClass = OPTS.get(args.opponent, ClaudePlayer)
     red = RedClass()
-    blue = TakeishiPlayer()
+    if args.blue == "rl":
+        blue = RLPlayer(model_path=args.model, epsilon=0.0)
+    else:
+        blue = TakeishiPlayer()
     print(f"=== {blue.team_name()} (Blue) vs {red.team_name()} (Red) ===")
 
     Game(blue, red, window=window).run()
