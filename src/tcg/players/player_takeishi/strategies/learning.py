@@ -251,14 +251,81 @@ class QNet(nn.Module):
     def forward(self, x):
         return self.net(x).squeeze(-1)
 
-class ReplayBuffer:
-    def __init__(self, capacity: int = 20000):
-        self.buffer = collections.deque(maxlen=capacity)
+# Dueling-style Q-network: Q(s,a) = V(s) + A(s,a)
+class QNetDueling(nn.Module):
+    def __init__(self, state_dim: int, action_dim: int, hid: int = 128):
+        super().__init__()
+        # Value stream depends only on state features
+        self.value = nn.Sequential(
+            nn.Linear(state_dim, hid),
+            nn.ReLU(),
+            nn.Linear(hid, hid),
+            nn.ReLU(),
+            nn.Linear(hid, 1),
+        )
+        # Advantage stream depends on combined state+action features
+        self.adv = nn.Sequential(
+            nn.Linear(state_dim + action_dim, hid),
+            nn.ReLU(),
+            nn.Linear(hid, hid),
+            nn.ReLU(),
+            nn.Linear(hid, 1),
+        )
+        self.state_dim = state_dim
+        self.action_dim = action_dim
+    def forward(self, x):
+        # x is concatenated [state, action]
+        s = x[..., :self.state_dim]
+        v = self.value(s)
+        a = self.adv(x)
+        return (v + a).squeeze(-1)
+
+class PrioritizedReplayBuffer:
+    """Proportional PER buffer with simple weighted sampling.
+
+    Stores (experience, priority). Sampling uses p_i^alpha / sum p^alpha.
+    Returns indices, batch, and importance weights w_i.
+    """
+    def __init__(self, capacity: int = 20000, alpha: float = 0.6, beta_start: float = 0.4, beta_increment: float = 1e-4, eps: float = 1e-5):
+        self.capacity = capacity
+        self.buffer: list[tuple] = []
+        self.priorities: list[float] = []
+        self.pos = 0
+        self.alpha = alpha
+        self.beta = beta_start
+        self.beta_increment = beta_increment
+        self.eps = eps
+        self._max_priority = 1.0
     def push(self, experience):
-        self.buffer.append(experience)
+        if len(self.buffer) < self.capacity:
+            self.buffer.append(experience)
+            self.priorities.append(self._max_priority)
+        else:
+            self.buffer[self.pos] = experience
+            self.priorities[self.pos] = self._max_priority
+            self.pos = (self.pos + 1) % self.capacity
     def sample(self, batch_size: int):
-        batch = random.sample(self.buffer, batch_size)
-        return batch
+        n = len(self.buffer)
+        if n == 0:
+            return [], [], []
+        # Probabilities
+        probs = np.array(self.priorities[:n], dtype=np.float32) ** self.alpha
+        probs_sum = float(probs.sum()) if float(probs.sum()) > 0 else 1.0
+        probs = probs / probs_sum
+        idxs = np.random.choice(n, size=batch_size, replace=False if n >= batch_size else True, p=probs)
+        batch = [self.buffer[int(i)] for i in idxs]
+        # Importance sampling weights
+        w = (n * probs[idxs]) ** (-self.beta)
+        w = w / (w.max() + 1e-8)
+        # Anneal beta
+        self.beta = min(1.0, self.beta + self.beta_increment)
+        return idxs, batch, w.astype(np.float32)
+    def update_priorities(self, idxs, new_priorities):
+        for i, p in zip(idxs, new_priorities):
+            pr = float(abs(p)) + self.eps
+            self.priorities[int(i)] = pr
+            if pr > self._max_priority:
+                self._max_priority = pr
     def __len__(self):
         return len(self.buffer)
 
@@ -273,15 +340,17 @@ class LearningAgent:
         self.device = device
         self.net = None
         self.target_net = None
-        self.replay = ReplayBuffer()
+        # PER buffer
+        self.replay = PrioritizedReplayBuffer()
         self.epsilon = 0.2
         self._train_steps = 0
         self.target_tau = 0.01  # soft update rate
         if torch is not None:
             from tcg import config as cfg
             # input is state(6) + action(9) = 15 dims
-            self.net = QNet(inp_dim=15).to(self.device)
-            self.target_net = QNet(inp_dim=15).to(self.device)
+            # Dueling network: split 6 state dims and 9 action dims
+            self.net = QNetDueling(state_dim=6, action_dim=9).to(self.device)
+            self.target_net = QNetDueling(state_dim=6, action_dim=9).to(self.device)
             if model_path is not None:
                 try:
                     self.net.load_state_dict(torch.load(model_path, map_location=self.device))
@@ -349,37 +418,53 @@ class LearningAgent:
         for _ in range(epochs):
             if len(self.replay) < batch_size:
                 return
-            batch = self.replay.sample(batch_size)
+            idxs, batch, iw = self.replay.sample(batch_size)
             # current Q
             inp = torch.stack([torch.from_numpy(np.concatenate([x[0], x[1]]).astype(np.float32)) for x in batch]).to(self.device)
             pred_q = self.net(inp)
-            # compute target = r + gamma * max_a' Q(s',a')
+            # compute Double DQN target: r + gamma * Q_target(s', argmax_a Q_online(s',a))
             targets = []
+            next_best_qs = []
             for (_, _, rwd, next_state_raw, done_flag) in batch:
                 if done_flag:
                     targets.append(float(rwd))
+                    next_best_qs.append(0.0)
                     continue
-                # max over next candidates
                 next_candidates = generate_action_candidates(next_state_raw)
                 if not next_candidates:
                     targets.append(float(rwd))
+                    next_best_qs.append(0.0)
                     continue
                 svec = featurize_state(next_state_raw)
-                best_val = None
+                # argmax over online net
+                best_idx = -1
+                best_q_online = None
                 with torch.no_grad():
-                    for (cmd, ns, nt) in next_candidates:
+                    for i, (cmd, ns, nt) in enumerate(next_candidates):
                         Avec = featurize_action(next_state_raw, cmd, ns, nt)
                         xin = torch.from_numpy(np.concatenate([svec, Avec]).astype(np.float32)).float().to(self.device)
-                        q = self.target_net(xin.unsqueeze(0)).item()
-                        if best_val is None or q > best_val:
-                            best_val = q
-                next_q = 0.0 if best_val is None else float(best_val)
-                targets.append(float(rwd) + gamma * next_q)
+                        q_online = self.net(xin.unsqueeze(0)).item()
+                        if best_q_online is None or q_online > best_q_online:
+                            best_q_online = q_online
+                            best_idx = i
+                # evaluate chosen action with target net
+                with torch.no_grad():
+                    cmd, ns, nt = next_candidates[best_idx]
+                    Avec = featurize_action(next_state_raw, cmd, ns, nt)
+                    xin = torch.from_numpy(np.concatenate([svec, Avec]).astype(np.float32)).float().to(self.device)
+                    q_target = self.target_net(xin.unsqueeze(0)).item()
+                targets.append(float(rwd) + gamma * float(q_target))
+                next_best_qs.append(float(q_target))
             tgt = torch.tensor(targets, dtype=torch.float32).to(self.device)
-            loss = nn.functional.mse_loss(pred_q, tgt)
+            # importance-weighted MSE
+            w = torch.from_numpy(iw).to(self.device)
+            loss = ((pred_q - tgt) ** 2 * w).mean()
             opt.zero_grad()
             loss.backward()
             opt.step()
+            # update PER priorities using absolute TD error
+            td_err = (pred_q.detach() - tgt).cpu().numpy()
+            self.replay.update_priorities(idxs, td_err)
             # soft update target network
             with torch.no_grad():
                 for tp, p in zip(self.target_net.parameters(), self.net.parameters()):

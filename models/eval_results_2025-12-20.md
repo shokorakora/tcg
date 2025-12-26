@@ -178,3 +178,15 @@ Environment: Windows, Python venv
 [2025-12-25 23:25:40] model=models\takeishi_final.pt episodes=50 Opponent=opportunist Summary: wins=46/50 draws=0 losses=4 timeouts=0 avg_steps=16251
 [2025-12-25 23:27:30] model=models\takeishi_final.pt episodes=50 Opponent=counter Summary: wins=21/50 draws=0 losses=29 timeouts=0 avg_steps=15281
 [2025-12-25 23:32:49] model=models\takeishi_final.pt episodes=50 Opponent=flow Summary: wins=50/50 draws=0 losses=0 timeouts=0 avg_steps=22301
+[2025-12-26 23:19:29] model=models\takeishi_ep50000.pt episodes=50 Opponent=claude Summary: wins=50/50 draws=0 losses=0 timeouts=0 avg_steps=11817
+[2025-12-26 23:21:24] model=models\takeishi_ep50000.pt episodes=50 Opponent=economist Summary: wins=48/50 draws=0 losses=2 timeouts=0 avg_steps=18525
+[2025-12-26 23:22:27] model=models\takeishi_ep50000.pt episodes=50 Opponent=random Summary: wins=50/50 draws=0 losses=0 timeouts=0 avg_steps=13011
+[2025-12-26 23:24:28] model=models\takeishi_ep50000.pt episodes=50 Opponent=splitpush Summary: wins=50/50 draws=0 losses=0 timeouts=0 avg_steps=16808
+[2025-12-26 23:25:58] model=models\takeishi_ep50000.pt episodes=50 Opponent=harasser Summary: wins=29/50 draws=0 losses=21 timeouts=0 avg_steps=16494
+[2025-12-26 23:27:00] model=models\takeishi_ep50000.pt episodes=50 Opponent=bulwark Summary: wins=2/50 draws=0 losses=48 timeouts=0 avg_steps=12063
+[2025-12-26 23:38:50] model=models\takeishi_ep50000.pt episodes=50 Opponent=anchor Summary: wins=7/50 draws=0 losses=43 timeouts=17 avg_steps=27693
+[2025-12-26 23:39:39] model=models\takeishi_ep50000.pt episodes=50 Opponent=feeder Summary: wins=0/50 draws=0 losses=50 timeouts=0 avg_steps=9483
+[2025-12-26 23:40:35] model=models\takeishi_ep50000.pt episodes=50 Opponent=rusher Summary: wins=50/50 draws=0 losses=0 timeouts=0 avg_steps=13375
+[2025-12-26 23:41:45] model=models\takeishi_ep50000.pt episodes=50 Opponent=opportunist Summary: wins=50/50 draws=0 losses=0 timeouts=0 avg_steps=15117
+[2025-12-26 23:43:08] model=models\takeishi_ep50000.pt episodes=50 Opponent=counter Summary: wins=11/50 draws=0 losses=39 timeouts=0 avg_steps=15008
+[2025-12-26 23:46:35] model=models\takeishi_ep50000.pt episodes=50 Opponent=flow Summary: wins=50/50 draws=0 losses=0 timeouts=0 avg_steps=19696
