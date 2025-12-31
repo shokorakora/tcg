@@ -345,6 +345,13 @@ class LearningAgent:
         self.epsilon = 0.2
         self._train_steps = 0
         self.target_tau = 0.01  # soft update rate
+        # n-step returns config
+        self.n_step = 3
+        self.gamma = 0.99
+        self._nstep_queue: collections.deque = collections.deque()
+        # gentle reward shaping magnitudes
+        self.shaping_neutral_bonus = 0.05
+        self.shaping_lv5_send_bonus = 0.03
         if torch is not None:
             from tcg import config as cfg
             # input is state(6) + action(9) = 15 dims
@@ -408,12 +415,79 @@ class LearningAgent:
         return best_action
 
     def observe(self, prev_state_vec, action_vec, reward, next_raw_state, done):
-        # store for replay (keep next raw state to compute max_a' Q(s',a'))
-        self.replay.push((prev_state_vec, action_vec, reward, next_raw_state, done))
+        """Store transition using n-step returns.
+
+        We maintain a queue of recent steps and, when size >= n, push
+        (s_t, a_t, R^{(n)}_t, s_{t+n}, done_{t+n}). On episode end, call
+        `flush_nstep()` to emit remaining shorter-n transitions.
+        """
+        self._nstep_queue.append((prev_state_vec, action_vec, float(reward), next_raw_state, bool(done)))
+        if len(self._nstep_queue) >= self.n_step:
+            R = 0.0
+            g = 1.0
+            for i in range(self.n_step):
+                R += g * float(self._nstep_queue[i][2])
+                g *= self.gamma
+            s_t, a_t = self._nstep_queue[0][0], self._nstep_queue[0][1]
+            next_s_raw = self._nstep_queue[self.n_step - 1][3]
+            done_n = self._nstep_queue[self.n_step - 1][4]
+            self.replay.push((s_t, a_t, R, next_s_raw, done_n))
+            self._nstep_queue.popleft()
+
+    def flush_nstep(self):
+        """Flush remaining queued transitions at episode end."""
+        while len(self._nstep_queue) > 0:
+            R = 0.0
+            g = 1.0
+            for i in range(len(self._nstep_queue)):
+                R += g * float(self._nstep_queue[i][2])
+                g *= self.gamma
+            s_t, a_t = self._nstep_queue[0][0], self._nstep_queue[0][1]
+            next_s_raw = self._nstep_queue[-1][3]
+            done_n = self._nstep_queue[-1][4]
+            self.replay.push((s_t, a_t, R, next_s_raw, done_n))
+            self._nstep_queue.popleft()
+
+    def shape_reward(self, prev_state_raw, action: Tuple[int,int,int], next_state_raw) -> float:
+        """Gentle reward shaping to encourage cracking neutrals and timely Lv5 sends.
+
+        - Add a small bonus when sending to an adjacent neutral, scaled by viability.
+        - Add a small bonus when a Level 5 near-full source sends out to avoid idling.
+        Magnitudes are deliberately modest.
+        """
+        try:
+            cmd, s, t = action
+            # Safety checks
+            if not (0 <= s < len(prev_state_raw)) or not (0 <= t < len(prev_state_raw)):
+                return 0.0
+            s_team, s_kind, s_lvl, s_pawns, s_upg, s_neighbors = prev_state_raw[s]
+            d_team, d_kind, d_lvl, d_pawns, d_upg, d_neighbors = prev_state_raw[t]
+            bonus = 0.0
+            # Neutral cracking bonus (only on move commands to neutral neighbors)
+            if cmd == 1 and d_team == 0 and (t in s_neighbors):
+                half_send = float(s_pawns // 2)
+                dmg = 0.95 if s_kind == 1 else 0.65
+                needed = float(d_pawns + d_lvl * 2 + 1)
+                margin = (half_send * dmg) - needed
+                # Viability scale in [0,1]
+                scale = max(0.0, min(1.0, margin / max(1.0, needed)))
+                bonus += self.shaping_neutral_bonus * scale
+            # Timely Lv5 send bonus (avoid idling at near-full Lv5)
+            if cmd == 1 and s_lvl == 5:
+                from tcg.config import fortress_limit
+                cap = float(fortress_limit[s_lvl])
+                fill = float(s_pawns) / max(1.0, cap)
+                if fill >= 0.90:
+                    bonus += self.shaping_lv5_send_bonus
+            return float(bonus)
+        except Exception:
+            return 0.0
 
     def train_from_replay(self, epochs: int = 1, batch_size: int = 64, lr: float = 1e-3, gamma: float = 0.99):
         if torch is None or self.net is None or self.target_net is None:
             return
+        # keep gamma consistent for n-step computation
+        self.gamma = gamma
         opt = optim.Adam(self.net.parameters(), lr=lr)
         for _ in range(epochs):
             if len(self.replay) < batch_size:

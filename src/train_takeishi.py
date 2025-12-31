@@ -111,12 +111,16 @@ def run(n_episodes: int = 100, save_every: int = 50, epsilon_min: float = 0.02, 
             # build action feature vector (supports upgrade and move)
             cmd, s, t = action
             act_feat = featurize_action(raw_state, cmd, s, t)
-            agent.observe(cur_feat, act_feat, reward, next_raw_state, done)
+            # gentle reward shaping
+            shaped = reward + agent.shape_reward(raw_state, action, next_raw_state)
+            agent.observe(cur_feat, act_feat, shaped, next_raw_state, done)
             steps += 1
             # training step every 32 samples
             if len(agent.replay) >= 64:
                 agent.train_from_replay(epochs=1, batch_size=64)
         print(f"Episode {ep} finished steps={steps} done={done} truncated={truncated} epsilon={agent.epsilon:.3f}")
+        # flush any remaining n-step transitions
+        agent.flush_nstep()
         if ep % save_every == 0:
             os.makedirs("models", exist_ok=True)
             global_ep = start_offset + ep
