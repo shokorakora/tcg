@@ -345,13 +345,14 @@ class LearningAgent:
         self.epsilon = 0.2
         self._train_steps = 0
         self.target_tau = 0.01  # soft update rate
-        # n-step returns config
-        self.n_step = 3
+        # n-step returns config (increase horizon for turtle games)
+        self.n_step = 5
         self.gamma = 0.99
         self._nstep_queue: collections.deque = collections.deque()
         # gentle reward shaping magnitudes
         self.shaping_neutral_bonus = 0.05
         self.shaping_lv5_send_bonus = 0.03
+        self.shaping_lv5_idle_penalty = 0.02
         if torch is not None:
             from tcg import config as cfg
             # input is state(6) + action(9) = 15 dims
@@ -479,6 +480,28 @@ class LearningAgent:
                 fill = float(s_pawns) / max(1.0, cap)
                 if fill >= 0.90:
                     bonus += self.shaping_lv5_send_bonus
+            # Small penalty when any near-full Lv5 has an adjacent neutral
+            # and the chosen action does not send from such a Lv5 to that neutral.
+            try:
+                from tcg.config import fortress_limit
+                has_candidate = False
+                for i, f in enumerate(prev_state_raw):
+                    team_i, kind_i, lvl_i, pawns_i, upg_i, neigh_i = f
+                    if team_i != 1 or lvl_i != 5:
+                        continue
+                    cap_i = float(fortress_limit[lvl_i])
+                    fill_i = float(pawns_i) / max(1.0, cap_i)
+                    if fill_i >= 0.90 and any(prev_state_raw[n][0] == 0 for n in neigh_i):
+                        has_candidate = True
+                        break
+                if has_candidate:
+                    is_sending_lv5_to_neutral = (
+                        cmd == 1 and s_lvl == 5 and d_team == 0 and (t in s_neighbors)
+                    )
+                    if not is_sending_lv5_to_neutral:
+                        bonus -= self.shaping_lv5_idle_penalty
+            except Exception:
+                pass
             return float(bonus)
         except Exception:
             return 0.0
