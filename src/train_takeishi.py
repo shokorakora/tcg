@@ -64,7 +64,7 @@ def choose_opponent(weights=None):
         raise ValueError(f"weights must have {len(pool)} values (got {len(w)}). Order: [Random, Claude, Economist, SplitPush, Harasser, Bulwark, Anchor, Feeder, Rusher, Opportunist, Counter, Flow]")
     return random.choices(pool, weights=w, k=1)[0]
 
-def run(n_episodes: int = 100, save_every: int = 50, epsilon_min: float = 0.02, tau: float = 0.01, opponent_weights=None, resume_from: str | None = None):
+def run(n_episodes: int = 100, save_every: int = 50, epsilon_min: float = 0.02, tau: float = 0.01, opponent_weights=None, resume_from: str | None = None, n_step: int = 5, shaping: bool = True, idle_penalty: bool = True):
     agent = LearningAgent(model_path=resume_from)
     start_offset = 0
     if resume_from:
@@ -76,6 +76,14 @@ def run(n_episodes: int = 100, save_every: int = 50, epsilon_min: float = 0.02, 
                 start_offset = 0
     # allow tuning target network soft-update rate
     agent.target_tau = tau
+    # configure n-step and shaping toggles
+    try:
+        agent.n_step = max(1, int(n_step))
+    except Exception:
+        agent.n_step = 5
+    agent.enable_shaping = bool(shaping)
+    agent.enable_idle_penalty = bool(idle_penalty)
+    print(f"Config: n_step={agent.n_step} shaping={agent.enable_shaping} idle_penalty={agent.enable_idle_penalty}")
     for ep in range(1, n_episodes+1):
         Opp = choose_opponent(opponent_weights)
         # strict whitelist enforcement: prevent accidental usage of disallowed players
@@ -137,6 +145,9 @@ if __name__ == '__main__':
     ap.add_argument('--tau', type=float, default=0.01)
     ap.add_argument('--weights', type=str, default=None, help='Comma-separated weights for opponents [Random, Claude, Economist, SplitPush, Harasser, Bulwark, Anchor, Feeder, Rusher, Opportunist, Counter, Flow]')
     ap.add_argument('--resume-from', type=str, default=None, help='Path to a saved model to resume training from (e.g., models/takeishi_ep1200.pt)')
+    ap.add_argument('--n-step', type=int, default=5, help='n-step return horizon (use 1 to disable)')
+    ap.add_argument('--shaping', type=str, default='true', help='Enable reward shaping (true/false)')
+    ap.add_argument('--idle-penalty', type=str, default='true', help='Enable Lv5 idle penalty shaping (true/false)')
     args = ap.parse_args()
 
     def parse_weights(ws: str | None):
@@ -145,11 +156,17 @@ if __name__ == '__main__':
         parts = [p.strip() for p in ws.split(',')]
         return [float(p) for p in parts]
 
+    def parse_bool(s: str) -> bool:
+        return str(s).strip().lower() in ('1','true','yes','y','on')
+
     run(
         n_episodes=args.episodes,
         save_every=args.save_every,
         epsilon_min=args.epsilon_min,
         tau=args.tau,
         opponent_weights=parse_weights(args.weights),
-        resume_from=args.resume_from
+        resume_from=args.resume_from,
+        n_step=args.n_step,
+        shaping=parse_bool(args.shaping),
+        idle_penalty=parse_bool(args.idle_penalty),
     )

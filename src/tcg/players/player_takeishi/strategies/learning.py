@@ -353,6 +353,9 @@ class LearningAgent:
         self.shaping_neutral_bonus = 0.05
         self.shaping_lv5_send_bonus = 0.03
         self.shaping_lv5_idle_penalty = 0.02
+        # shaping toggles
+        self.enable_shaping = True
+        self.enable_idle_penalty = True
         if torch is not None:
             from tcg import config as cfg
             # input is state(6) + action(9) = 15 dims
@@ -457,6 +460,8 @@ class LearningAgent:
         Magnitudes are deliberately modest.
         """
         try:
+            if not getattr(self, 'enable_shaping', True):
+                return 0.0
             cmd, s, t = action
             # Safety checks
             if not (0 <= s < len(prev_state_raw)) or not (0 <= t < len(prev_state_raw)):
@@ -483,6 +488,8 @@ class LearningAgent:
             # Small penalty when any near-full Lv5 has an adjacent neutral
             # and the chosen action does not send from such a Lv5 to that neutral.
             try:
+                if not getattr(self, 'enable_idle_penalty', True):
+                    return float(bonus)
                 from tcg.config import fortress_limit
                 has_candidate = False
                 for i, f in enumerate(prev_state_raw):
