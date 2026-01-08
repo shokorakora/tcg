@@ -64,7 +64,7 @@ def choose_opponent(weights=None):
         raise ValueError(f"weights must have {len(pool)} values (got {len(w)}). Order: [Random, Claude, Economist, SplitPush, Harasser, Bulwark, Anchor, Feeder, Rusher, Opportunist, Counter, Flow]")
     return random.choices(pool, weights=w, k=1)[0]
 
-def run(n_episodes: int = 100, save_every: int = 50, epsilon_min: float = 0.02, tau: float = 0.01, opponent_weights=None, resume_from: str | None = None, n_step: int = 5, shaping: bool = True, idle_penalty: bool = True):
+def run(n_episodes: int = 100, save_every: int = 50, epsilon_min: float = 0.02, tau: float = 0.01, opponent_weights=None, resume_from: str | None = None, n_step: int = 5, shaping: bool = True, idle_penalty: bool = True, step_penalty: float = 0.0):
     agent = LearningAgent(model_path=resume_from)
     start_offset = 0
     if resume_from:
@@ -83,7 +83,9 @@ def run(n_episodes: int = 100, save_every: int = 50, epsilon_min: float = 0.02, 
         agent.n_step = 5
     agent.enable_shaping = bool(shaping)
     agent.enable_idle_penalty = bool(idle_penalty)
-    print(f"Config: n_step={agent.n_step} shaping={agent.enable_shaping} idle_penalty={agent.enable_idle_penalty}")
+    agent.enable_step_penalty = float(step_penalty) > 0.0
+    agent.shaping_step_penalty = float(step_penalty)
+    print(f"Config: n_step={agent.n_step} shaping={agent.enable_shaping} idle_penalty={agent.enable_idle_penalty} step_penalty={agent.shaping_step_penalty}")
     for ep in range(1, n_episodes+1):
         Opp = choose_opponent(opponent_weights)
         # strict whitelist enforcement: prevent accidental usage of disallowed players
@@ -148,6 +150,7 @@ if __name__ == '__main__':
     ap.add_argument('--n-step', type=int, default=5, help='n-step return horizon (use 1 to disable)')
     ap.add_argument('--shaping', type=str, default='true', help='Enable reward shaping (true/false)')
     ap.add_argument('--idle-penalty', type=str, default='true', help='Enable Lv5 idle penalty shaping (true/false)')
+    ap.add_argument('--step-penalty', type=float, default=0.0, help='Tiny per-step penalty to discourage stalling (e.g., 0.0001)')
     args = ap.parse_args()
 
     def parse_weights(ws: str | None):
@@ -169,4 +172,5 @@ if __name__ == '__main__':
         n_step=args.n_step,
         shaping=parse_bool(args.shaping),
         idle_penalty=parse_bool(args.idle_penalty),
+        step_penalty=args.step_penalty,
     )

@@ -119,7 +119,7 @@ def generate_action_candidates(state) -> List[Tuple[int,int,int]]:
         for n in state[s][5]:
             d_team, _, d_lvl, d_pawns, _, _ = state[n]
             # Use expected arrival damage to avoid weak/trickle sends
-            if (half_send * dmg) <= (d_pawns + 2):
+            if (half_send * dmg) <= (d_pawns + 1):
                 continue
             if d_team == 0:
                 candidates.append((1, s, n))
@@ -133,7 +133,7 @@ def generate_action_candidates(state) -> List[Tuple[int,int,int]]:
                 lvl = state[s][2]
                 from tcg.config import fortress_limit
                 # only reinforce when near full to avoid trickles
-                if state[s][3] >= int(fortress_limit[lvl] * 0.85):
+                if state[s][3] >= int(fortress_limit[lvl] * 0.80):
                     # concentrate only via adjacent edge to a frontline fortress
                     for n in state[s][5]:
                         if n in frontlines:
@@ -353,9 +353,11 @@ class LearningAgent:
         self.shaping_neutral_bonus = 0.05
         self.shaping_lv5_send_bonus = 0.03
         self.shaping_lv5_idle_penalty = 0.02
+        self.shaping_step_penalty = 1e-4
         # shaping toggles
         self.enable_shaping = True
         self.enable_idle_penalty = True
+        self.enable_step_penalty = False
         if torch is not None:
             from tcg import config as cfg
             # input is state(6) + action(9) = 15 dims
@@ -485,6 +487,9 @@ class LearningAgent:
                 fill = float(s_pawns) / max(1.0, cap)
                 if fill >= 0.90:
                     bonus += self.shaping_lv5_send_bonus
+            # Per-step tiny penalty to reduce stalling
+            if getattr(self, 'enable_step_penalty', False):
+                bonus -= self.shaping_step_penalty
             # Small penalty when any near-full Lv5 has an adjacent neutral
             # and the chosen action does not send from such a Lv5 to that neutral.
             try:
