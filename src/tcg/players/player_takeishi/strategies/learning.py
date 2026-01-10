@@ -119,7 +119,9 @@ def generate_action_candidates(state) -> List[Tuple[int,int,int]]:
         for n in state[s][5]:
             d_team, _, d_lvl, d_pawns, _, _ = state[n]
             # Use expected arrival damage to avoid weak/trickle sends
-            if (half_send * dmg) <= (d_pawns + 1):
+            # Be slightly stricter vs enemy forts to avoid overextension
+            threshold = (d_pawns + 1) if d_team == 0 else (d_pawns + 2)
+            if (half_send * dmg) <= threshold:
                 continue
             if d_team == 0:
                 candidates.append((1, s, n))
@@ -133,7 +135,7 @@ def generate_action_candidates(state) -> List[Tuple[int,int,int]]:
                 lvl = state[s][2]
                 from tcg.config import fortress_limit
                 # only reinforce when near full to avoid trickles
-                if state[s][3] >= int(fortress_limit[lvl] * 0.80):
+                if state[s][3] >= int(fortress_limit[lvl] * 0.85):
                     # concentrate only via adjacent edge to a frontline fortress
                     for n in state[s][5]:
                         if n in frontlines:
