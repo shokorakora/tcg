@@ -16,6 +16,7 @@ from tcg.players.strategy_opportunist import Opportunist
 from tcg.players.strategy_counter import Counter
 from tcg.players.strategy_flow import Flow
 from tcg.players.player_rl import RLPlayer
+from tcg.players.player_ONCT import ONCT
 
 OPTS = {
     "claude": ClaudePlayer,
@@ -30,6 +31,7 @@ OPTS = {
     "opportunist": Opportunist,
     "counter": Counter,
     "flow": Flow,
+    "onct": ONCT,
 }
 
 if __name__ == "__main__":
