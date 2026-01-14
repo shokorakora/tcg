@@ -156,9 +156,9 @@ class ShotaPlayer(Controller):
             c_adj_enemies = [n for n in c_nei if self.enemy(state, n)]
 
             if not c_adj_enemies:
-                # Case ①: No enemy adjacent to Center -> wait until 120% then push Center->enemy_center
+                # Case ①: No enemy adjacent to Center -> wait until 110% then push Center->enemy_center
                 center_limit = fortress_limit[state[Center][2]]
-                center_ok_110 = state[Center][3] >= int(center_limit * 1.2)
+                center_ok_110 = state[Center][3] >= int(center_limit * 0.6)
                 if not self.own(state, enemy_center):
                     if self.can_send(state, Center) and center_ok_110:
                         return 1, Center, enemy_center
